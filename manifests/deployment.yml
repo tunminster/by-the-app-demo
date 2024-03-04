@@ -1,0 +1,19 @@
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: bytheappdemo 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bytheappdemo
+  template:
+    metadata:
+      labels:
+        app: bytheappdemo 
+    spec:
+      containers:
+        - name: bytheappdemo 
+          image: pngoacr.azurecr.io/bytheappdemo
+          ports:
+          - containerPort: 80
