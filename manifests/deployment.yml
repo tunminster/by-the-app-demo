@@ -56,7 +56,7 @@ metadata:
   namespace: #{env-namespace}#
 spec:
   tls:
-  - hosts:
+  - hosts:-
     - demo-api.bytheapp.com
     secretName: bytheappdemo-tls-secret
   rules:
