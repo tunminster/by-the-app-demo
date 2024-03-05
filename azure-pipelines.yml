@@ -47,6 +47,19 @@ stages:
 - stage: Deploy
   displayName: Deploy stage
   dependsOn: Build
+  
+  variables:
+    - group: bytheappdemo-api
+    - name: repository-image
+      value: 'pngoacr.azurecr.io/bytheappdemo-api:$(Build.BuildNumber)'
+    - name: acr-secret-name
+      value: 'hn-prod-acr-secret'
+    - name: host-url
+      value: demo-api.bytheapp.com
+    - name: env-name
+      value: 'Development'
+    - name: env-namespace
+      value: 'hn-prod'
 
   jobs:
   - deployment: Deploy
