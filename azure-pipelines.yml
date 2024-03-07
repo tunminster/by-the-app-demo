@@ -5,87 +5,110 @@
 trigger:
 - master
 
-resources:
-- repo: self
 
 variables:
 
   # Container registry service connection established during pipeline creation
-  dockerRegistryServiceConnection: '80d4c17a-3be2-4b84-aa86-b5e6c9bbc991'
-  imageRepository: 'bytheappdemo'
-  containerRegistry: 'pngoacr.azurecr.io'
-  dockerfilePath: '**/Dockerfile'
-  tag: '$(Build.BuildId)'
-  imagePullSecret: 'pngoacr5fe2-auth'
-
-  # Agent VM image name
-  vmImageName: 'ubuntu-latest'
-
+  buildConfiguration: 'Release'
+  tag: '$(Build.BuildNumber)'
+  imageRepository: 'bytheappdemo-api'
+  # dockerRegistryServiceConnection: '80d4c17a-3be2-4b84-aa86-b5e6c9bbc991'
+  # containerRegistry: 'pngoacr.azurecr.io'
+  # dockerfilePath: '**/Dockerfile'
+  # imagePullSecret: 'pngoacr5fe2-auth'
 
 stages:
-- stage: Build
-  displayName: Build stage
-  jobs:
-  - job: Build
-    displayName: Build
-    pool:
-      vmImage: $(vmImageName)
-    steps:
-    - task: Docker@2
-      displayName: Build and push an image to container registry
-      inputs:
-        command: buildAndPush
-        repository: $(imageRepository)
-        dockerfile: $(dockerfilePath)
-        containerRegistry: $(dockerRegistryServiceConnection)
-        tags: |
-          $(tag)
-
-    - upload: manifests
-      artifact: manifests
-
-- stage: Deploy
-  displayName: Deploy stage
-  dependsOn: Build
-  
-  variables:
-    - group: bytheappdemo-api
-    - name: repository-image
-      value: 'pngoacr.azurecr.io/bytheappdemo-api:$(Build.BuildNumber)'
-    - name: acr-secret-name
-      value: 'hn-prod-acr-secret'
-    - name: host-url
-      value: demo-api.bytheapp.com
-    - name: env-name
-      value: 'Development'
-    - name: env-namespace
-      value: 'hn-prod'
-
-  jobs:
-  - deployment: Deploy
-    displayName: Deploy
-    pool:
-      vmImage: $(vmImageName)
-    environment: 'hn-prod'
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - task: KubernetesManifest@0
-            displayName: Create imagePullSecret
+  - stage: Build
+    displayName: 'Build project'
+    jobs:
+      - job: Build
+        displayName: Build
+        pool:
+          vmImage: ubuntu-latest
+        
+        steps:
+        
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '3.x'
+            addToPath: true
+            architecture: 'x64'
+          displayName: 'Install python version 3.x'
+        
+        - task: PythonScript@0
+          inputs:
+            scriptSource: 'inline'
+            script: |
+              pip install --upgrade pip
+              pip install -r requirements.txt
+          displayName: 'Install dependencies'
+        
+        - script: |
+          displayName: 'Build project'
+          
+  - stage: DeployDev
+    displayName: 'Deploy dev'
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+    
+    variables:
+      - name: repository-image
+        value: 'pngoacr.azurecr.io/bytheappdemo-api:$(Build.BuildNumber)'
+      - name: acr-secret-name
+        value: 'hn-prod-acr-secret'
+      - name: host-url
+        value: 'api-demo.bytheapp.com'
+      - name: env-name
+        value: 'Production'
+      - name: env-namespace
+        value: 'hn-prod'
+    jobs:
+      - job: DeployApp
+        displayName: 'Deploy web api'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: Docker@2
             inputs:
-              action: createSecret
-              secretName: $(imagePullSecret)
-              dockerRegistryEndpoint: $(dockerRegistryServiceConnection)
+              containerRegistry: 'hn-acr-connection'
+              repository: '$(imageRepository)'
+              command: 'buildAndPush'
+              Dockerfile: '**/Dockerfile'
+              buildContext: .
+              tags: |
+                $(tag)
 
-          - task: KubernetesManifest@0
-            displayName: Deploy to Kubernetes cluster
+          - task: CopyFiles@2
             inputs:
-              action: deploy
-              manifests: |
-                $(Pipeline.Workspace)/manifests/deployment.yml
-              imagePullSecrets: |
-                $(imagePullSecret)
-              containers: |
-                $(containerRegistry)/$(imageRepository):$(tag)
+              SourceFolder: '$(System.DefaultWorkingDirectory)/manifests'
+              Contents: 'deployment.yml'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/manifests'
+          
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+            displayName: 'Replace tokens in deploy file'
+            inputs:
+              rootDirectory: '$(Build.ArtifactStagingDirectory)/manifests'
+              targetFiles: 'deployment.yml'
+              escapeType: none
+              
+          - script: 'cat $(Build.ArtifactStagingDirectory)/manifests/deployment.yml'
+            displayName: 'Cat deploy'
+            
+          - task: KubectlInstaller@0
+            inputs:
+              kubectlVersion: 'latest'
+
+          - task: Kubernetes@1
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: 'hn-platform-aks-prod'
+              namespace: 'hn-prod'
+              command: 'apply'
+              arguments: '-f $(Build.ArtifactStagingDirectory)/manifests/deployment.yml'
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Container Registry'
+              dockerRegistryEndpoint: 'hn-acr-connection'
+              secretName: 'hn-prod-acr-secret'
+
+       
 
