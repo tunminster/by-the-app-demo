@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: by-the-app-api-demo
-        image: bytheapp/by-the-app-api-demo:latest
+        image: #{repository-image}#
         resources:
           requests:
             memory: "64Mi"
@@ -39,7 +39,6 @@ spec:
     - protocol: TCP
       port: 80
       targetPort: 80
-  type: LoadBalancer
 
 
 ---
@@ -57,10 +56,10 @@ metadata:
 spec:
   tls:
   - hosts:-
-    - demo-api.bytheapp.com
+    - api-demo.bytheapp.com
     secretName: bytheappdemo-tls-secret
   rules:
-    - host: demo-api.bytheapp.com
+    - host: #{host-url}#
       http:
         paths:
           - path: /
