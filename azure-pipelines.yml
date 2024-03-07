@@ -35,12 +35,9 @@ stages:
             architecture: 'x64'
           displayName: 'Install python version 3.x'
         
-        - task: PythonScript@0
-          inputs:
-            scriptSource: 'inline'
-            script: |
-              pip install --upgrade pip
-              pip install -r requirements.txt
+        - script: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
           displayName: 'Install dependencies'
         
         - script: |
