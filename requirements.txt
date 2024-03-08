@@ -1,3 +1,4 @@
 flask==2.0.2
 requests==2.26.0
 twilio
+Werkzeug==2.2.2
