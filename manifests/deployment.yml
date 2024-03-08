@@ -20,7 +20,7 @@ spec:
             memory: "64Mi"
             cpu: "50m"
         ports:
-        - containerPort: 80
+        - containerPort: 8080
       imagePullSecrets:
         - name: #{acr-secret-name}#
 
