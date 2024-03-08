@@ -53,7 +53,7 @@ spec:
     tls:
     - hosts:
       - api-demo.bytheapp.com
-      secretName: bytheappdemo-secret-tls
+      secretName: bytheappdemo-ingress-tls
     rules:
       - host: #{host-url}#
         http:
