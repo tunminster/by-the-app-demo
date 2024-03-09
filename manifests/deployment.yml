@@ -21,6 +21,9 @@ spec:
             cpu: "50m"
         ports:
         - containerPort: 8080
+        env:
+        - name: OPENAI_API_KEY
+          value: #{openai-api-key}#
       imagePullSecrets:
         - name: #{acr-secret-name}#
 
