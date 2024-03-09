@@ -9,12 +9,32 @@ def voice():
     # Start our TwiML response
     resp = VoiceResponse()
 
-    # Start our <Gather> verb
-    with resp.gather(numDigits=1, action='/gather') as gather:
-        gather.say('For sales, press 1. For support, press 2.')
+    # Directly gather speech input from the caller
+    resp.say("Hello, you've reached our automated service. Please tell us how we can help you today.", voice='alice', language='en-US')
+    resp.gather(input='speech', action='/respond', timeout=5, speech_timeout='auto')
 
-    # If the user doesn't select an option, redirect them into a loop
+    # Redirect to voice in case the gather does not execute, for example, if the caller does not say anything.
     resp.redirect('/voice')
+
+    return str(resp)
+
+@app.route("/respond", methods=['GET', 'POST'])
+def respond():
+    """Handle speech input from the user and respond."""
+    resp = VoiceResponse()
+
+    # Check if we have speech input
+    if 'SpeechResult' in request.values:
+        speech_text = request.values['SpeechResult']
+
+        # Generate a response based on the user's speech. Implement this function based on your requirements.
+        response_message = "You said: " + speech_text + ". We will process your request."
+
+        resp.say(response_message, voice='alice', language='en-US')
+    else:
+        # In case there's no input, ask them to try again.
+        resp.say("We didn't catch that. Could you please repeat?", voice='alice', language='en-US')
+        resp.redirect('/voice')
 
     return str(resp)
 

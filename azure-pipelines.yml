@@ -49,6 +49,7 @@ stages:
     condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
     
     variables:
+      - group: bytheapp-demo
       - name: repository-image
         value: 'pngoacr.azurecr.io/bytheappdemo-api:$(Build.BuildNumber)'
       - name: acr-secret-name

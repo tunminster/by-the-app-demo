@@ -3,3 +3,4 @@ requests==2.26.0
 twilio
 Werkzeug>=2.0
 gunicorn>=20.0
+openai
