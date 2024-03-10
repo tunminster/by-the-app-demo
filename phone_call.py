@@ -9,6 +9,7 @@ openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 def get_ai_response(user_input):
     
+    
     try:
         training_data = [
             {"role": "system", "content": "Hello! How can I assist you today?"},
@@ -24,6 +25,10 @@ def get_ai_response(user_input):
             {"role": "system", "content": "You're welcome. Have a great day!"}
         ]
 
+        # Prepare the conversation history as a prompt
+        conversation_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in training_data])
+        conversation_history += f"\nuser: {user_input}\nsystem:"
+
         
         response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
@@ -33,8 +38,10 @@ def get_ai_response(user_input):
             stop=None
         )
 
-        return response.choices[0].message['content']
+        return response.choices[0].message.content
     except Exception as e:
+        print(e)
+        return e.message
         return "I'm sorry, I'm having trouble processing your request. Please try again later."
 
 @app.route("/voice", methods=['GET', 'POST'])
