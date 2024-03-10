@@ -9,29 +9,33 @@ openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 def get_ai_response(user_input):
     
-    training_data = [
-        {"role": "system", "content": "Hello! How can I assist you today?"},
-        {"role": "user", "content": "I'm calling to cancel my credit card."},
-        {"role": "system", "content": "Sure. I can help you with this. Can you please provide me with your fullname?"},
-        {"role": "user", "content": "John Doe"},
-        {"role": "system", "content": "Thank you, John. Can I ask why you want to cancel your credit card?"},
-        {"role": "user", "content": "I think I have too many credit cards and I want to simplify my finances."},
-        {"role": "system", "content": "I understand. I can help you with that. Can you please provide me with your credit card number?"},
-        {"role": "user", "content": "Sure. It's 1234 5678 9101 1121"},
-        {"role": "system", "content": "Thank you, John. I have successfully processed your request. Your credit card will be cancelled within 24 hours."},
-        {"role": "user", "content": "Thank you."},
-        {"role": "system", "content": "You're welcome. Have a great day!"}
-    ]
+    try:
+        training_data = [
+            {"role": "system", "content": "Hello! How can I assist you today?"},
+            {"role": "user", "content": "I'm calling to cancel my credit card."},
+            {"role": "system", "content": "Sure. I can help you with this. Can you please provide me with your fullname?"},
+            {"role": "user", "content": "John Doe"},
+            {"role": "system", "content": "Thank you, John. Can I ask why you want to cancel your credit card?"},
+            {"role": "user", "content": "I think I have too many credit cards and I want to simplify my finances."},
+            {"role": "system", "content": "I understand. I can help you with that. Can you please provide me with your credit card number?"},
+            {"role": "user", "content": "Sure. It's 1234 5678 9101 1121"},
+            {"role": "system", "content": "Thank you, John. I have successfully processed your request. Your credit card will be cancelled within 24 hours."},
+            {"role": "user", "content": "Thank you."},
+            {"role": "system", "content": "You're welcome. Have a great day!"}
+        ]
 
-    
-    response = openai.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=training_data + [{"role": "user", "content": user_input}],
-        max_tokens=150,
-        temperature=0.7,
-        stop=None
-    )
-    return response.choices[0].message['content']
+        
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=training_data + [{"role": "user", "content": user_input}],
+            max_tokens=150,
+            temperature=0.7,
+            stop=None
+        )
+
+        return response.choices[0].message['content']
+    except Exception as e:
+        return "I'm sorry, I'm having trouble processing your request. Please try again later."
 
 @app.route("/voice", methods=['GET', 'POST'])
 def voice():
