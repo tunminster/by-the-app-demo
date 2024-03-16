@@ -17,8 +17,8 @@ spec:
         image: #{repository-image}#
         resources:
           limits:
-            memory: "64Mi"
-            cpu: "50m"
+            memory: "128Mi" # Adjusted memory limit
+            cpu: "100m"    # Adjusted CPU limit
         ports:
         - containerPort: 8080
         env:
