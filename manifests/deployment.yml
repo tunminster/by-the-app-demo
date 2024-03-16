@@ -24,6 +24,10 @@ spec:
         env:
         - name: OPENAI_API_KEY
           value: #{openai-api-key}#
+        - name: API_SECRET_KEY
+          value: #{api-secret-key}#
+        - name: TWILIO_AUTH_KEY
+          value: #{twilio-auth-key}#
       imagePullSecrets:
         - name: #{acr-secret-name}#
 
