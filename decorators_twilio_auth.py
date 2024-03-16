@@ -16,6 +16,7 @@ def validate_twilio_request(f):
 
         post_vars = request.form.to_dict()
         signature = request.headers.get('X-TWILIO-SIGNATURE', '')
+        print(" signature " + str(signature))
 
         if not validator.validate(url, post_vars, signature):
             return abort(403)
