@@ -14,7 +14,7 @@ def validate_twilio_request(f):
 
         url = request.url
 
-        post_vars = request.form.to_dict()
+        post_vars = request.form
         signature = request.headers.get('X-TWILIO-SIGNATURE', '')
         print(" signature " + str(signature))
 
