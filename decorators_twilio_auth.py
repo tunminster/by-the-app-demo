@@ -1,6 +1,6 @@
 from functools import wraps
 from flask import request, abort
-from twilio.request.validator import RequestValidator
+from twilio.request_validator import RequestValidator
 import os
 
 

@@ -4,4 +4,3 @@ twilio
 Werkzeug>=2.0
 gunicorn>=20.0
 openai
-twilio.request.validator
