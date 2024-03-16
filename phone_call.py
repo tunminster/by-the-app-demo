@@ -46,7 +46,7 @@ def get_ai_response(user_input):
         return e.message
         return "I'm sorry, I'm having trouble processing your request. Please try again later."
 
-@app.route("/voice", methods=['GET', 'POST'])
+@app.route("/voice", methods=['POST'])
 #@require_api_key
 @validate_twilio_request
 
