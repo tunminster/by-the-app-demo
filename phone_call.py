@@ -1,9 +1,14 @@
 from flask import Flask, request
 from twilio.twiml.voice_response import VoiceResponse
+from decorators import require_api_key
+from decorators_twilio_auth import validate_twilio_request
 
 app = Flask(__name__)
 
 @app.route("/voice", methods=['GET', 'POST'])
+#@require_api_key
+@validate_twilio_request
+
 def voice():
     """Respond to incoming phone calls with a menu of options"""
     # Start our TwiML response
