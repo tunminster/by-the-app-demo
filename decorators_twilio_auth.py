@@ -3,6 +3,7 @@ from flask import request, abort
 from twilio.request_validator import RequestValidator
 import os
 import logging
+logging.basicConfig(level=logging.INFO)
 
 
 TWILIO_AUTH_TOKEN = os.environ.get('TWILIO_AUTH_KEY')
