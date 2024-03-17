@@ -14,7 +14,11 @@ def validate_twilio_request(f):
     def decorated_function(*args, **kwargs):
         validator = RequestValidator(TWILIO_AUTH_TOKEN)
 
-        url = request.url
+        forwarded_proto = request.headers.get('X-Forwarded-Proto', '')
+        if forwarded_proto == 'https':
+            url = request.url.replace("http://", "https://")
+        else:
+            url = request.url
 
         post_vars = request.form.to_dict()
         signature = request.headers.get('X-Twilio-Signature', '')
