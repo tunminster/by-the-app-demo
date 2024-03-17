@@ -17,7 +17,7 @@ def validate_twilio_request(f):
 
         post_vars = request.form.to_dict()
         signature = request.headers.get('X-Twilio-Signature', '')
-        logging.debug("Twilio Signature: %s", request.headers.get('X-Twilio-Signature', ''))
+        logging.info("Twilio Signature: %s", request.headers.get('X-Twilio-Signature', ''))
 
         if not validator.validate(url, post_vars, signature):
             #return abort(403)
