@@ -19,10 +19,11 @@ def validate_twilio_request(f):
         post_vars = request.form.to_dict()
         signature = request.headers.get('X-Twilio-Signature', '')
         logging.info("Twilio Signature: %s", request.headers.get('X-Twilio-Signature', ''))
+        logging.info("Twilio URL: %s", request.url)
+        logging.info("Twilio POST Vars: %s", request.form.to_dict())
 
         if not validator.validate(url, post_vars, signature):
-            #return abort(403)
-            return f(*args, **kwargs)
+            return abort(403)
         
         return f(*args, **kwargs)
     
