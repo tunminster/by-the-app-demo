@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, Blueprint
 from twilio.twiml.voice_response import VoiceResponse
 from app.utils.decorators import require_api_key
 from app.utils.decorators_twilio_auth import validate_twilio_request
@@ -44,9 +44,10 @@ def get_ai_response(user_input):
     except Exception as e:
         print(e)
         return e.message
-        return "I'm sorry, I'm having trouble processing your request. Please try again later."
 
-@app.route("/voice", methods=['POST'])
+voice_bp = Blueprint('voice_bp', __name__)
+
+@voice_bp.route("/voice", methods=['POST'])
 #@require_api_key
 @validate_twilio_request
 
