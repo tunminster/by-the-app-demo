@@ -2,6 +2,7 @@ from flask import Flask, request, Blueprint
 from twilio.twiml.voice_response import VoiceResponse
 from app.utils.decorators import require_api_key
 from app.utils.decorators_twilio_auth import validate_twilio_request
+from app.utils.training_data_loader import get_cached_training_data
 import os
 import openai
 
@@ -13,19 +14,7 @@ def get_ai_response(user_input):
     
     
     try:
-        training_data = [
-            {"role": "system", "content": "Hello! How can I assist you today?"},
-            {"role": "user", "content": "I'm calling to cancel my credit card."},
-            {"role": "system", "content": "Sure. I can help you with this. Can you please provide me with your fullname?"},
-            {"role": "user", "content": "John Doe"},
-            {"role": "system", "content": "Thank you, John. Can I ask why you want to cancel your credit card?"},
-            {"role": "user", "content": "I think I have too many credit cards and I want to simplify my finances."},
-            {"role": "system", "content": "I understand. I can help you with that. Can you please provide me with your credit card number?"},
-            {"role": "user", "content": "Sure. It's 1234 5678 9101 1121"},
-            {"role": "system", "content": "Thank you, John. I have successfully processed your request. Your credit card will be cancelled within 24 hours."},
-            {"role": "user", "content": "Thank you."},
-            {"role": "system", "content": "You're welcome. Have a great day!"}
-        ]
+        training_data = get_cached_training_data()
 
         # Prepare the conversation history as a prompt
         conversation_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in training_data])

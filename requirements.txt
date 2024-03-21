@@ -4,3 +4,5 @@ twilio
 Werkzeug>=2.0
 gunicorn>=20.0
 openai
+Flask-Caching
+azure-storage-blob

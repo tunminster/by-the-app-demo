@@ -1,0 +1,25 @@
+from azure.storage.blob import BlobServiceClient
+import csv
+import os
+from flask import current_app as app
+from app import cache
+from .. import config as app
+
+def load_training_data_from_blob(container_name, blob_name):
+    
+    connect_str = os.getenv('BYTHEAPP_AZURE_STORAGE_CONNECTION_STRING')
+    blob_service_client = BlobServiceClient.from_connection_string(connect_str)
+    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
+    
+    blob_data = blob_client.download_blob().content_as_text()
+
+    training_data = []
+
+    for row in csv.reader(blob_data.splitlines()):
+        training_data.append({"role": row["role"], "content": row["content"]})
+    
+    return training_data
+
+@cache.cached(timeout=300, key_prefix='training_data')
+def get_cached_training_data():
+    return load_training_data_from_blob(app.config['AZURE_STORAGE_CONTAINER'], app.config['TRAINING_BLOB_DATA_FILE'])
