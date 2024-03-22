@@ -1,5 +1,5 @@
 from flask import Flask
-from extensions import cache
+from .extensions import cache
 
 def create_app():
     app = Flask(__name__)
