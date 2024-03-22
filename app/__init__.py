@@ -1,12 +1,12 @@
 from flask import Flask
-from flask_caching import Cache
+from extensions import cache
 
 def create_app():
     app = Flask(__name__)
 
     # Configure and initialize caching
     app.config['CACHE_TYPE'] = 'SimpleCache' # Simple in-memory cache
-    cache = Cache(app)
+    cache.init_app(app)
 
 
     from app.routes.voice import voice_bp

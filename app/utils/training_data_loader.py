@@ -1,8 +1,7 @@
 from azure.storage.blob import BlobServiceClient
 import csv
 import os
-from flask import current_app as app
-from app import cache
+from flask import current_app
 from .. import config as app
 
 def load_training_data_from_blob(container_name, blob_name):
@@ -22,4 +21,11 @@ def load_training_data_from_blob(container_name, blob_name):
 
 @cache.cached(timeout=300, key_prefix='training_data')
 def get_cached_training_data():
-    return load_training_data_from_blob(app.config['AZURE_STORAGE_CONTAINER'], app.config['TRAINING_BLOB_DATA_FILE'])
+    cache = current_app.extensions['cache']
+    container_name = app.config['AZURE_STORAGE_CONTAINER']
+    blob_name = app.config['TRAINING_BLOB_DATA_FILE']
+
+    key_prefix = 'training_data_{}'.format(blob_name)
+
+    return cache.cached(timeout=300, key_prefix=key_prefix)(lambda: load_training_data_from_blob(container_name, blob_name))()
+
