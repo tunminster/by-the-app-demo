@@ -19,7 +19,6 @@ def load_training_data_from_blob(container_name, blob_name):
     
     return training_data
 
-@cache.cached(timeout=300, key_prefix='training_data')
 def get_cached_training_data():
     cache = current_app.extensions['cache']
     container_name = app.config['AZURE_STORAGE_CONTAINER']
