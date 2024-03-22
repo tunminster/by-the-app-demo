@@ -2,7 +2,6 @@ from azure.storage.blob import BlobServiceClient
 import csv
 import os
 from flask import current_app
-from .. import config as app
 
 def load_training_data_from_blob(container_name, blob_name):
     
@@ -21,8 +20,8 @@ def load_training_data_from_blob(container_name, blob_name):
 
 def get_cached_training_data():
     cache = current_app.extensions['cache']
-    container_name = app.config['AZURE_STORAGE_CONTAINER']
-    blob_name = app.config['TRAINING_BLOB_DATA_FILE']
+    container_name = current_app.config['AZURE_STORAGE_CONTAINER']
+    blob_name = current_app.config['TRAINING_BLOB_DATA_FILE']
 
     key_prefix = 'training_data_{}'.format(blob_name)
 

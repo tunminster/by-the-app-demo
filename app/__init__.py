@@ -4,6 +4,9 @@ from .extensions import cache
 def create_app():
     app = Flask(__name__)
 
+    # Assuming config.py is at the root of your Flask app directory
+    app.config.from_pyfile('config.py')
+    
     # Configure and initialize caching
     app.config['CACHE_TYPE'] = 'SimpleCache' # Simple in-memory cache
     cache.init_app(app)
