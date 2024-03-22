@@ -8,6 +8,8 @@ def create_app():
     app.config.from_pyfile('config.py')
 
     # Configure and initialize caching
+    app.config['CACHE_TYPE'] = 'SimpleCache'
+
     cache.init_app(app)
 
 
