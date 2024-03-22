@@ -6,7 +6,7 @@ def create_app():
 
     # Configure and initialize caching
     app.config['CACHE_TYPE'] = 'SimpleCache' # Simple in-memory cache
-    app.cache = Cache(app)
+    cache = Cache(app)
 
 
     from app.routes.voice import voice_bp
