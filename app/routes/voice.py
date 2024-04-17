@@ -5,6 +5,7 @@ from app.utils.decorators_twilio_auth import validate_twilio_request
 from app.utils.training_data_loader import get_cached_training_data
 import os
 import openai
+from app.utils.speech_services import synthesize_speech
 
 app = Flask(__name__)
 
@@ -47,13 +48,19 @@ def voice():
     speech_result = request.values.get('SpeechResult', '').lower()
 
     if "thank you for helping me" in speech_result:
-        resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
+        #resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
+        audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
+        resp.play(audio_url)
     elif "no" in speech_result:
-        resp.say("Bye for now! Feel free to call us anytime.")
+        #resp.say("Bye for now! Feel free to call us anytime.")
+        audio_url = synthesize_speech("Bye for now! Feel free to call us anytime.")
+        resp.play(audio_url)
         resp.hangup()
     else:
         ai_response = get_ai_response(speech_result)
-        resp.say(ai_response, voice='alice', language='en-US')
+        #resp.say(ai_response, voice='alice', language='en-US')
+        audio_url = synthesize_speech(ai_response)
+        resp.play(audio_url)
         
         # Gather more speech input from the caller
         resp.gather(input='speech', action='/voice', timeout=10, speech_timeout='auto')

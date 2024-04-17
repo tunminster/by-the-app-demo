@@ -30,6 +30,8 @@ spec:
           value: #{twilio-auth-key}#
         - name: BYTHEAPP_AZURE_STORAGE_CONNECTION_STRING
           value: #{bytheapp-azure-storage-connection-string}#
+        - name: KEY_VAULT_NAME
+          value: #{key-vault-name}#
       imagePullSecrets:
         - name: #{acr-secret-name}#
 
