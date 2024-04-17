@@ -1,11 +1,21 @@
 from google.cloud import texttospeech
 from azure.storage.blob import BlobServiceClient
 from flask import current_app
+from app.utils.azure_utils import get_google_cloud_service_account_from_key_vault
+from google.oauth2.service_account import Credentials
 import os
+import json
+
+def get_credentials():
+    service_account_info = json.loads(get_google_cloud_service_account_from_key_vault())
+    credentials = Credentials.from_service_account_info(service_account_info)
+    return credentials
+
+
 
 def synthesize_speech(text, language_code="en-US", voice_name="en-US-Wavenet-D"):
-
-    client = texttospeech.TextToSpeechClient()
+    credentials = get_credentials()
+    client = texttospeech.TextToSpeechClient(credentials=credentials)
 
     # Configure the request
     synthesis_input = texttospeech.SynthesisInput(text=text)
