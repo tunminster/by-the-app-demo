@@ -32,6 +32,12 @@ spec:
           value: #{bytheapp-azure-storage-connection-string}#
         - name: KEY_VAULT_NAME
           value: #{key-vault-name}#
+        - name: AZURE_CLIENT_ID
+          value: #{app-dev-client-id}#
+        - name: AZURE_CLIENT_SECRET
+          value: #{app-dev-secret}#
+        - name: AZURE_TENANT_ID
+          value: #{app-dev-tenant-id}#
       imagePullSecrets:
         - name: #{acr-secret-name}#
 
