@@ -9,3 +9,4 @@ azure-storage-blob
 azure-keyvault-secrets 
 azure-identity
 google-cloud-speech
+google-cloud-storage
