@@ -32,7 +32,7 @@ def synthesize_speech(text, language_code="en-US", voice_name="en-US-Wavenet-D")
 
     # Generate a unique filename for the audio file
     # Ensure that the filename is URL-safe and unique
-    blob_name = f"{text[:10].replace(' ', '_')}-{os.urandom(4).hex()}.mp3"
+    blob_name = f"{text[:10].replace(' ', '')}-{os.urandom(4).hex()}.mp3"
     
     # Get the blob client for uploading the file
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
