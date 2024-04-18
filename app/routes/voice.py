@@ -72,7 +72,7 @@ def voice():
 
     # Redirect to voice in case the gather does not execute, for example, if the caller does not say anything.
     #resp.redirect('/voice')
-
+    print("resp " + str(resp))
     #return str(resp)
     return resp
 
