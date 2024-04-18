@@ -16,5 +16,6 @@ def get_google_cloud_service_account_from_key_vault():
 
     secret_name = "google-service-account"
     retrieved_secret = client.get_secret(secret_name)
+    print(" secret " + retrieved_secret)
 
     return retrieved_secret
