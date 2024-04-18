@@ -37,7 +37,7 @@ def get_ai_response(user_input):
 
 voice_bp = Blueprint('voice_bp', __name__)
 
-@voice_bp.route("/voice", methods=['POST'])
+@voice_bp.route("/voice", methods=['GET','POST'])
 #@require_api_key
 @validate_twilio_request
 
@@ -63,7 +63,7 @@ def voice():
         resp.play(audio_url)
         
         # Gather more speech input from the caller
-        resp.gather(input='speech', action='/voice', timeout=10, speech_timeout='auto')
+        resp.gather(input='speech', action='/voice', timeout=20, speech_timeout='auto')
     
 
     # Directly gather speech input from the caller
