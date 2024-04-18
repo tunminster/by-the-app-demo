@@ -30,11 +30,19 @@ def synthesize_speech(text, language_code="en-US", voice_name="en-US-Wavenet-D")
     blob_service_client = BlobServiceClient.from_connection_string(os.getenv('BYTHEAPP_AZURE_STORAGE_CONNECTION_STRING'))
     container_name = current_app.config['AZURE_STORAGE_VOICE_CONTAINER']
 
-    blob_client = blob_service_client.get_blob_client(container=container_name, blob=f"{text[:10]}-{os.urandom(4).hex().mp3}")
+    # Generate a unique filename for the audio file
+    # Ensure that the filename is URL-safe and unique
+    blob_name = f"{text[:10].replace(' ', '_')}-{os.urandom(4).hex()}.mp3"
+    
+    # Get the blob client for uploading the file
+    blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
 
-    # Upload the audio content
+    # Upload the audio content to Azure Blob Storage
     blob_client.upload_blob(response.audio_content, overwrite=True)
-    blob_client.set_blob_properties(content_type="audio/mp3")
 
     # Assuming the container is configured to allow public access
-    return blob_client.url
+    audio_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{container_name}/{blob_name}"
+
+    return audio_url
+
+    
