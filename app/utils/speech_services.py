@@ -1,5 +1,5 @@
 from google.cloud import texttospeech
-from azure.storage.blob import BlobServiceClient
+from azure.storage.blob import BlobServiceClient, ContentSettings
 from flask import current_app
 from app.utils.azure_utils import get_google_cloud_service_account_from_key_vault
 from google.oauth2.service_account import Credentials
@@ -40,10 +40,11 @@ def synthesize_speech(text, language_code="en-US", voice_name="en-US-Wavenet-D")
     # Get the blob client for uploading the file
     blob_client = blob_service_client.get_blob_client(container=container_name, blob=blob_name)
 
-    # Upload the audio content to Azure Blob Storage
-    blob_client.upload_blob(response.audio_content, overwrite=True)
+    # Ensure to set the correct content settings for MP3
+    content_settings = ContentSettings(content_type='audio/mpeg')
 
-   
+    # Upload the audio content to Azure Blob Storage
+    blob_client.upload_blob(response.audio_content, overwrite=True,content_settings=content_settings)
 
     # Assuming the container is configured to allow public access
     audio_url = f"https://{blob_service_client.account_name}.blob.core.windows.net/{container_name}/{blob_name}"
