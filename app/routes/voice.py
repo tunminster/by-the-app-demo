@@ -48,19 +48,19 @@ def voice():
     speech_result = request.values.get('SpeechResult', '').lower()
 
     if "thank you for helping me" in speech_result:
-        #resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
-        audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
-        resp.play(audio_url)
+        resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
+        #audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
+        #resp.play(audio_url)
     elif "no" in speech_result:
-        #resp.say("Bye for now! Feel free to call us anytime.")
-        audio_url = synthesize_speech("Bye for now! Feel free to call us anytime.")
-        resp.play(audio_url)
+        resp.say("Bye for now! Feel free to call us anytime.")
+        #audio_url = synthesize_speech("Bye for now! Feel free to call us anytime.")
+        #resp.play(audio_url)
         resp.hangup()
     else:
         ai_response = get_ai_response(speech_result)
-        #resp.say(ai_response, voice='alice', language='en-US')
-        audio_url = synthesize_speech(ai_response)
-        resp.play(audio_url)
+        resp.say(ai_response, voice='alice', language='en-US')
+        #audio_url = synthesize_speech(ai_response)
+        #resp.play(audio_url)
         
         # Gather more speech input from the caller
         resp.gather(input='speech', action='/voice', timeout=20, speech_timeout='auto')
