@@ -68,7 +68,7 @@ stages:
         steps:
           - task: Docker@2
             inputs:
-              containerRegistry: 'hn-acr-connection'
+              containerRegistry: 'containerRegistry'
               repository: '$(imageRepository)'
               command: 'buildAndPush'
               Dockerfile: '**/Dockerfile'
