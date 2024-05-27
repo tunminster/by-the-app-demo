@@ -99,14 +99,14 @@ stages:
           - task: Kubernetes@1
             inputs:
               connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: 'hn-platform-aks-prod'
-              namespace: 'hn-prod'
+              kubernetesServiceEndpoint: 'by-the-app-cluster'
+              namespace: by-the-app-prod'
               command: 'apply'
               arguments: '-f $(Build.ArtifactStagingDirectory)/manifests/deployment.yml'
               secretType: 'dockerRegistry'
               containerRegistryType: 'Container Registry'
-              dockerRegistryEndpoint: 'hn-acr-connection'
-              secretName: 'hn-prod-acr-secret'
+              dockerRegistryEndpoint: 'containerRegistry'
+              secretName: 'by-the-app-acr-secret'
 
        
 
