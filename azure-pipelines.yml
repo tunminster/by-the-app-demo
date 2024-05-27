@@ -51,9 +51,9 @@ stages:
     variables:
       - group: bytheapp-demo
       - name: repository-image
-        value: 'pngoacr.azurecr.io/bytheappdemo-api:$(Build.BuildNumber)'
+        value: 'bytheapp.azurecr.io/bytheappdemo-api:$(Build.BuildNumber)'
       - name: acr-secret-name
-        value: 'hn-prod-acr-secret'
+        value: 'by-the-app-acr-secret'
       - name: host-url
         value: 'api-demo.bytheapp.com'
       - name: env-name
