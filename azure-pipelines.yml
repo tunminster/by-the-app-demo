@@ -106,7 +106,7 @@ stages:
               secretType: 'dockerRegistry'
               containerRegistryType: 'Container Registry'
               dockerRegistryEndpoint: 'containerRegistry'
-              secretName: 'by-the-app-acr-secret'
+              
 
        
 
