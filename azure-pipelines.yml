@@ -59,7 +59,7 @@ stages:
       - name: env-name
         value: 'Production'
       - name: env-namespace
-        value: 'hn-prod'
+        value: 'by-the-app-prod'
     jobs:
       - job: DeployApp
         displayName: 'Deploy web api'
@@ -106,7 +106,7 @@ stages:
               secretType: 'dockerRegistry'
               containerRegistryType: 'Container Registry'
               dockerRegistryEndpoint: 'containerRegistry'
-              
+              secretName: 'by-the-app-acr-secret'
 
        
 
