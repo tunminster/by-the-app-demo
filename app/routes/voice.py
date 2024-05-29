@@ -45,6 +45,8 @@ def voice():
     """Respond to incoming phone calls with a menu of options"""
     # Start our TwiML response
     resp = VoiceResponse()
+    greeting = "Welcome to ABC Bank, how can we assist you today?"
+    resp.say(greeting, voice='alice', language='en-US')
     speech_result = request.values.get('SpeechResult', '').lower()
 
     if "thank you for helping me" in speech_result:
@@ -78,10 +80,8 @@ def voice():
 @app.route("/respond", methods=['GET', 'POST'])
 def respond():
     """Handle speech input from the user and respond."""
-    greeting = "Welcome to ABC Bank, how can we assist you today?"
-
     resp = VoiceResponse()
-    resp.say(greeting, voice='alice', language='en-US')
+    
 
     # Check if we have speech input
     if 'SpeechResult' in request.values:
