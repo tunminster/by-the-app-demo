@@ -78,7 +78,10 @@ def voice():
 @app.route("/respond", methods=['GET', 'POST'])
 def respond():
     """Handle speech input from the user and respond."""
+    greeting = "Welcome to ABC Bank, how can we assist you today?"
+
     resp = VoiceResponse()
+    resp.say(greeting, voice='alice', language='en-US')
 
     # Check if we have speech input
     if 'SpeechResult' in request.values:
@@ -90,7 +93,7 @@ def respond():
         resp.say(response_message, voice='alice', language='en-US')
     else:
         # In case there's no input, ask them to try again.
-        resp.say("We didn't catch that. Could you please repeat?", voice='alice', language='en-US')
+        resp.say("Hello, I am not sure I am hearing you. Could you please repeat?", voice='alice', language='en-US')
         resp.redirect('/voice')
 
     return str(resp)
