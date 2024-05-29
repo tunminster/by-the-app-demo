@@ -100,13 +100,13 @@ stages:
             inputs:
               connectionType: 'Kubernetes Service Connection'
               kubernetesServiceEndpoint: 'by-the-app-cluster'
-              namespace: by-the-app-prod'
+              namespace: 'by-the-app-prod'
               command: 'apply'
               arguments: '-f $(Build.ArtifactStagingDirectory)/manifests/deployment.yml'
               secretType: 'dockerRegistry'
               containerRegistryType: 'Container Registry'
               dockerRegistryEndpoint: 'containerRegistry'
-              secretName: 'by-the-app-acr-secret1'
+              secretName: 'by-the-app-acr-secret'
 
        
 
