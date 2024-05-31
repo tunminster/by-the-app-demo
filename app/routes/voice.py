@@ -45,8 +45,11 @@ def voice():
     """Respond to incoming phone calls with a menu of options"""
     # Start our TwiML response
     resp = VoiceResponse()
+
+    gather = resp.gather(action='/response', input='speech', timeout=60, method='POST')
+
     greeting = "Welcome to ABC Bank, how can we assist you today?"
-    resp.say(greeting, voice='alice', language='en-US')
+    gather.say(greeting, voice='alice', language='en-US')
     speech_result = request.values.get('SpeechResult', '').lower()
 
     if "thank you for helping me" in speech_result:
@@ -77,26 +80,57 @@ def voice():
     print("resp " + str(resp))
     return str(resp)
 
-@app.route("/respond", methods=['GET', 'POST'])
-def respond():
-    """Handle speech input from the user and respond."""
+@app.route("/handle-response", methods=['GET', 'POST'])
+def handle_respond():
+    """Handle speech input from the user and response."""
     resp = VoiceResponse()
     
-
-    # Check if we have speech input
-    if 'SpeechResult' in request.values:
-        speech_text = request.values['SpeechResult']
-
-        # Generate a response based on the user's speech. Implement this function based on your requirements.
-        response_message = "You said: " + speech_text + ". We will process your request."
-
-        resp.say(response_message, voice='alice', language='en-US')
+    speech_result = request.values.get('SpeechResult', '').lower()
+    
+    if speech_result:
+        ai_response = get_ai_response(speech_result)
+        resp.say(ai_response, voice='alice', language='en-US')
     else:
-        # In case there's no input, ask them to try again.
-        resp.say("Hello, I am not sure I am hearing you. Could you please repeat?", voice='alice', language='en-US')
-        resp.redirect('/voice')
+        resp.redirect('/no-response')
 
     return str(resp)
+
+@app.route("/no-response", methods=['GET', 'POST'])
+def no_response():
+    resp = VoiceResponse()
+
+    # First attempt to re-engage
+    gather = resp.gather(action='/handle-response', method='POST', input='speech', timeout=20)
+
+    gather.say("Hello, are you still there? Please let us know how we can assist you.", voice='alice', language='en-US')
+
+    # If still no response, redirect to a final warning route
+    resp.redirect('/final-warning')
+
+    return str(resp)
+
+@app.route("/final-warning", methods=['GET', 'POST'])
+def final_warning():
+    resp = VoiceResponse()
+
+    # Final attempt to re-engage
+    gather = resp.gather(action='/handle-response', method='POST', input='speech', timeout=20)
+
+    gather.say("We have not heard from you. Please speak to continue. We will disconnect the call in 2 minutes if there is no response.", voice='alice', language='en-US')
+
+    # Set up the hang-up if no response after final warning
+    resp.redirect('/hang-up')
+
+    return str(resp)
+
+@app.route("/hang-up", methods=['GET', 'POST'])
+def hand_up():
+    resp = VoiceResponse()
+    resp.say("No response detected, we are now disconnecting the call. Goodbye!", voice='alice', language='en-US')
+    resp.hangup()
+
+    return str(resp)
+
 
 if __name__ == "__main__":
     app.run(debug=True, host='0.0.0.0', port=80)
