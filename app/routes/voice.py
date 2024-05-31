@@ -56,11 +56,6 @@ def voice():
         resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
         #audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
         #resp.play(audio_url)
-    elif "no" in speech_result:
-        resp.say("Bye for now! Feel free to call us anytime.")
-        #audio_url = synthesize_speech("Bye for now! Feel free to call us anytime.")
-        #resp.play(audio_url)
-        resp.hangup()
     else:
         ai_response = get_ai_response(speech_result)
         resp.say(ai_response, voice='alice', language='en-US')
