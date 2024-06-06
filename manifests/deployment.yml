@@ -38,6 +38,12 @@ spec:
           value: #{app-dev-secret}#
         - name: AZURE_TENANT_ID
           value: #{app-dev-tenant-id}#
+        - name: SQLALCHEMY_DATABASE_URI
+          value: #{sqlalchemy-database-uri}#
+        - name: FLASK_ENV
+          value: development
+        - name: SECRET_KEY
+          value: #{db-secret-key}#
       imagePullSecrets:
         - name: #{acr-secret-name}#
 

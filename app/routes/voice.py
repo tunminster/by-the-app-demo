@@ -40,30 +40,29 @@ voice_bp = Blueprint('voice_bp', __name__)
 @voice_bp.route("/voice", methods=['GET','POST'])
 #@require_api_key
 @validate_twilio_request
-
 def voice():
     """Respond to incoming phone calls with a menu of options"""
     # Start our TwiML response
     resp = VoiceResponse()
 
-    gather = resp.gather(action='/response', input='speech', timeout=60, method='POST')
+    gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
 
     greeting = "Welcome to ABC Bank, how can we assist you today?"
     gather.say(greeting, voice='alice', language='en-US')
-    speech_result = request.values.get('SpeechResult', '').lower()
+    #speech_result = request.values.get('SpeechResult', '').lower()
 
-    if "thank you for helping me" in speech_result:
-        resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
-        #audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
-        #resp.play(audio_url)
-    else:
-        ai_response = get_ai_response(speech_result)
-        resp.say(ai_response, voice='alice', language='en-US')
-        #audio_url = synthesize_speech(ai_response)
-        #resp.play(audio_url)
+    # if "thank you for helping me" in speech_result:
+    #     resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
+    #     #audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
+    #     #resp.play(audio_url)
+    # else:
+    #     ai_response = get_ai_response(speech_result)
+    #     resp.say(ai_response, voice='alice', language='en-US')
+    #     #audio_url = synthesize_speech(ai_response)
+    #     #resp.play(audio_url)
         
-        # Gather more speech input from the caller
-        resp.gather(input='speech', action='/voice', timeout=20, speech_timeout='auto')
+    #     # Gather more speech input from the caller
+    #     resp.gather(input='speech', action='/voice', timeout=20, speech_timeout='auto')
     
 
     # Directly gather speech input from the caller
@@ -72,11 +71,11 @@ def voice():
 
     # Redirect to voice in case the gather does not execute, for example, if the caller does not say anything.
     #resp.redirect('/voice')
-    print("resp " + str(resp))
+    #print("resp " + str(resp))
     return str(resp)
 
 @app.route("/handle-response", methods=['GET', 'POST'])
-def handle_respond():
+def handle_response():
     """Handle speech input from the user and response."""
     resp = VoiceResponse()
     
@@ -85,6 +84,14 @@ def handle_respond():
     if speech_result:
         ai_response = get_ai_response(speech_result)
         resp.say(ai_response, voice='alice', language='en-US')
+
+        if should_end_call(ai_response):
+            resp.say("Thank you for calling, goodbye!", voice='alice', language='en-US')
+            resp.hangup()
+        else:
+            # Continue the conversation by gathering more input
+            resp.gather(input='speech', action='/handle-response', timeout=20)
+
     else:
         resp.redirect('/no-response')
 
@@ -125,6 +132,14 @@ def hand_up():
     resp.hangup()
 
     return str(resp)
+
+def should_end_call(ai_response):
+    # Lowercase to standardize the input for comparison
+    lower_response = ai_response.lower()
+    # Check for phrases that indicate ending the call
+    if "goodbye" in lower_response or "goodbye!" in lower_response:
+        return True
+    return False
 
 
 if __name__ == "__main__":
