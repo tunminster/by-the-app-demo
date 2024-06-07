@@ -18,7 +18,7 @@ def create_app():
     app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('SQLALCHEMY_DATABASE_URI')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-    #db.init_app(app)
+    db.init_app(app)
 
     if os.getenv('FLASK_ENV') == 'development':
         with app.app_context():
