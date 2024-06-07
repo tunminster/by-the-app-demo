@@ -16,6 +16,8 @@ def load_training_data_from_blob(container_name, blob_name):
 
     for row in csv.DictReader(blob_data.splitlines()):
         training_data.append({"role": row["role"], "content": row["content"]})
+
+    print(training_data)
     
     return training_data
 
