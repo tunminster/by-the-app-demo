@@ -11,4 +11,4 @@ azure-identity
 google-cloud-texttospeech
 google-cloud-storage
 Flask-SQLAlchemy==2.5.1
-pyodbc==4.0.30
+pyodbc
