@@ -1,5 +1,5 @@
 from flask import Flask, request, Blueprint
-from twilio.twiml.voice_response import VoiceResponse
+from twilio.twiml.voice_response import VoiceResponse,Gather
 from app.utils.decorators import require_api_key
 from app.utils.decorators_twilio_auth import validate_twilio_request
 from app.utils.training_data_loader import get_cached_training_data
@@ -47,7 +47,7 @@ def voice():
     # Start our TwiML response
     resp = VoiceResponse()
 
-    gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
+    gather = Gather(action='/handle-response', input='speech', timeout=20, method='POST')
 
     greeting = "Welcome to ABC Bank, how can we assist you today?"
     gather.say(greeting, voice='alice', language='en-US')
@@ -87,12 +87,21 @@ def handle_response():
         ai_response = get_ai_response(speech_result)
         resp.say(ai_response, voice='alice', language='en-US')
 
-        if should_end_call(ai_response):
+        if 'goodbye' in ai_response.lower() or 'thank you for calling' in ai_response.lower():
             resp.say("Thank you for calling, goodbye!", voice='alice', language='en-US')
             resp.hangup()
         else:
             # Continue the conversation by gathering more input
-            resp.gather(input='speech', action='/handle-response', timeout=20)
+            gather = Gather(action='/handle-response', input='speech', timeout=20, method='POST')
+            gather.say("How can I assist you further?", voice='alice', language='en-US')
+            resp.append(gather)
+
+        # if should_end_call(ai_response):
+        #     resp.say("Thank you for calling, goodbye!", voice='alice', language='en-US')
+        #     resp.hangup()
+        # else:
+        #     # Continue the conversation by gathering more input
+        #     resp.gather(input='speech', action='/handle-response', timeout=20)
 
     else:
         resp.redirect('/no-response')
