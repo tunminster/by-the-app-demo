@@ -7,7 +7,7 @@ import os
 import openai
 from app.utils.speech_services import synthesize_speech
 from utils.db_gather_info_helpers import VoiceHelper
-from .utils.db_setup import db
+from app.utils.db_setup import db
 
 app = Flask(__name__)
 
