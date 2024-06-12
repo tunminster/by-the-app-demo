@@ -31,7 +31,7 @@ class VoiceHelper:
     
     @staticmethod
     def save_call_info(session,db):
-        from .utils.db_setup import CallInfo
+        from app.utils.db_setup import CallInfo
         call_info = CallInfo(
             full_name=session['full_name'],
             date_of_birth=session['date_of_birth'],
