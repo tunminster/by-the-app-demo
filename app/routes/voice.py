@@ -76,7 +76,7 @@ def voice():
     #print("resp " + str(resp))
     return str(resp)
 
-@app.route("/handle-response", methods=['GET', 'POST'])
+@voice_bp.route("/handle-response", methods=['GET', 'POST'])
 def handle_response():
     """Handle speech input from the user and response."""
     resp = VoiceResponse()
@@ -99,7 +99,7 @@ def handle_response():
 
     return str(resp)
 
-@app.route("/no-response", methods=['GET', 'POST'])
+@voice_bp.route("/no-response", methods=['GET', 'POST'])
 def no_response():
     resp = VoiceResponse()
 
@@ -113,7 +113,7 @@ def no_response():
 
     return str(resp)
 
-@app.route("/final-warning", methods=['GET', 'POST'])
+@voice_bp.route("/final-warning", methods=['GET', 'POST'])
 def final_warning():
     resp = VoiceResponse()
 
@@ -127,7 +127,7 @@ def final_warning():
 
     return str(resp)
 
-@app.route("/hang-up", methods=['GET', 'POST'])
+@voice_bp.route("/hang-up", methods=['GET', 'POST'])
 def hand_up():
     resp = VoiceResponse()
     resp.say("No response detected, we are now disconnecting the call. Goodbye!", voice='alice', language='en-US')
