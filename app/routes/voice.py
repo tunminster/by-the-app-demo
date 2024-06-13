@@ -47,7 +47,7 @@ def voice():
     # Start our TwiML response
     resp = VoiceResponse()
 
-    gather = Gather(action='/handle-response', input='speech', timeout=20, method='POST')
+    gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
 
     greeting = "Welcome to ABC Bank, how can we assist you today?"
     gather.say(greeting, voice='alice', language='en-US')
@@ -92,7 +92,7 @@ def handle_response():
             resp.hangup()
         else:
             # Continue the conversation by gathering more input
-            gather = Gather(action='/handle-response', input='speech', timeout=20, method='POST')
+            gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
             gather.say("How can I assist you further?", voice='alice', language='en-US')
             resp.append(gather)
 
