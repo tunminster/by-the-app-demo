@@ -59,6 +59,8 @@ def voice():
         input="Today is a wonderful day to build something people love!"
     )
 
+    response.stream_to_file(speech_file_path)
+
     #gather.say(greeting, voice='alice', language='en-US')
     # Provide the URL to the audio file
     audio_url = url_for('static', filename='speech.mp3', _external=True)
