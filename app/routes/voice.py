@@ -51,15 +51,15 @@ def voice():
 
     greeting = "Welcome to ABC Bank, how can we assist you today?"
     gather.say(greeting, voice='alice', language='en-US')
-    #speech_result = request.values.get('SpeechResult', '').lower()
+    speech_result = request.values.get('SpeechResult', '').lower()
 
-    # if "thank you for helping me" in speech_result:
-    #     resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
-    #     #audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
-    #     #resp.play(audio_url)
-    # else:
-    #     ai_response = get_ai_response(speech_result)
-    #     resp.say(ai_response, voice='alice', language='en-US')
+    if "thank you for helping me" in speech_result:
+        resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
+        #audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
+        #resp.play(audio_url)
+    else:
+        ai_response = get_ai_response(speech_result)
+        resp.say(ai_response, voice='alice', language='en-US')
     #     #audio_url = synthesize_speech(ai_response)
     #     #resp.play(audio_url)
         
