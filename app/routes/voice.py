@@ -59,6 +59,8 @@ def voice():
         input="Today is a wonderful day to build something people love!"
     )
 
+    print(speech_file_path)
+
     response.stream_to_file(speech_file_path)
 
     #gather.say(greeting, voice='alice', language='en-US')
