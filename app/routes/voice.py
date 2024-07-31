@@ -1,4 +1,4 @@
-from flask import Flask, request, Blueprint
+from flask import Flask, request, Blueprint, url_for
 from twilio.twiml.voice_response import VoiceResponse,Gather
 from app.utils.decorators import require_api_key
 from app.utils.decorators_twilio_auth import validate_twilio_request
@@ -8,6 +8,7 @@ import openai
 from app.utils.speech_services import synthesize_speech
 from app.utils.db_gather_info_helpers import VoiceHelper
 from app.utils.db_setup import db
+from pathlib import Path
 
 app = Flask(__name__)
 
@@ -50,7 +51,19 @@ def voice():
     gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
 
     greeting = "Welcome to ABC Bank, how can we assist you today?"
-    gather.say(greeting, voice='alice', language='en-US')
+
+    speech_file_path = Path(__file__).parent / "static" / "speech.mp3"
+    response = openai.audio.speech.create(
+        model="tts-1",
+        voice="alloy",
+        input="Today is a wonderful day to build something people love!"
+    )
+
+    #gather.say(greeting, voice='alice', language='en-US')
+    # Provide the URL to the audio file
+    audio_url = url_for('static', filename='speech.mp3', _external=True)
+    resp.play(audio_url)
+
     speech_result = request.values.get('SpeechResult', '').lower()
 
     if "thank you for helping me" in speech_result:
