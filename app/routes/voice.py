@@ -48,7 +48,7 @@ def voice():
     # Start our TwiML response
     resp = VoiceResponse()
 
-    gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
+    #gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
 
     greeting = "Welcome to ABC Bank, how can we assist you today?"
 
