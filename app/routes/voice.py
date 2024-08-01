@@ -78,7 +78,8 @@ def voice():
         #resp.play(audio_url)
     else:
         ai_response = get_ai_response(speech_result)
-        resp.say(ai_response, voice='alice', language='en-US')
+        resp.play(audio_url)
+        #resp.say(ai_response, voice='alice', language='en-US')
     #     #audio_url = synthesize_speech(ai_response)
     #     #resp.play(audio_url)
         
@@ -112,7 +113,7 @@ def handle_response():
         else:
             # Continue the conversation by gathering more input
             gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
-            gather.say("How can I assist you further?", voice='alice', language='en-US')
+            gather.say("How can I assist you further go?", voice='alice', language='en-US')
             resp.append(gather)
 
         # if should_end_call(ai_response):
