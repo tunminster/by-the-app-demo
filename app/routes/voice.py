@@ -53,6 +53,7 @@ def voice():
     greeting = "Welcome to ABC Bank, how can we assist you today?"
 
     speech_file_path = Path(__file__).parents[1] / "static" / "speech.mp3"
+    print("speech_file_path xxxx ", speech_file_path)
     response = openai.audio.speech.create(
         model="tts-1",
         voice="alloy",
