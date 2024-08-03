@@ -120,7 +120,7 @@ def hand_up():
 def generate_speech(text, filename):
     """Generate speech using OpenAI and save to a static file."""
     speech_file_path = Path(__file__).resolve().parent.parent / "static" / filename
-    response = openai.Audio.speech.create(
+    response = openai.audio.speech.create(
         model="tts-1",
         voice="alloy",
         input=text
