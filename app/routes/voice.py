@@ -48,52 +48,14 @@ def voice():
     # Start our TwiML response
     resp = VoiceResponse()
 
-    #gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
+    gather = resp.gather(action='/handle-response', input='speech', timeout=10, method='POST')
 
     greeting = "Welcome to ABC Bank, how can we assist you today?"
+    path_to_speech = generate_speech(greeting, "welcome.mp3")
 
-    speech_file_path = Path(__file__).resolve().parent.parent / "static" / "speech.mp3"
-    print("speech_file_path xxxx ", speech_file_path)
-    response = openai.audio.speech.create(
-        model="tts-1",
-        voice="alloy",
-        input="Today is a wonderful day to build something people love!"
-    )
+    gather.play(url_for('static', filename=path_to_speech, _external=True))
+    resp.append(gather)
 
-    print("speech_file_path", speech_file_path)
-
-    response.stream_to_file(speech_file_path)
-
-    #gather.say(greeting, voice='alice', language='en-US')
-    # Provide the URL to the audio file
-    audio_url = url_for('static', filename='speech.mp3', _external=True)
-    print("audio_url", audio_url)
-    resp.play(audio_url)
-
-    speech_result = request.values.get('SpeechResult', '').lower()
-
-    if "thank you for helping me" in speech_result:
-        resp.say("You're welcome! If you have anything else, just let me know.", voice='alice', language='en-US')
-        #audio_url = synthesize_speech("You're welcome! If you have anything else, just let me know.")
-        #resp.play(audio_url)
-    else:
-        ai_response = get_ai_response(speech_result)
-        resp.play(audio_url)
-        #resp.say(ai_response, voice='alice', language='en-US')
-    #     #audio_url = synthesize_speech(ai_response)
-    #     #resp.play(audio_url)
-        
-    #     # Gather more speech input from the caller
-    #     resp.gather(input='speech', action='/voice', timeout=20, speech_timeout='auto')
-    
-
-    # Directly gather speech input from the caller
-    #resp.say("Hello, you've reached our automated service. Please tell us how we can help you today.", voice='alice', language='en-US')
-    #resp.gather(input='speech', action='/respond', timeout=5, speech_timeout='auto')
-
-    # Redirect to voice in case the gather does not execute, for example, if the caller does not say anything.
-    #resp.redirect('/voice')
-    #print("resp " + str(resp))
     return str(resp)
 
 @voice_bp.route("/handle-response", methods=['GET', 'POST'])
@@ -103,28 +65,19 @@ def handle_response():
     
     speech_result = request.values.get('SpeechResult', '').lower()
     
-    if speech_result:
-        ai_response = get_ai_response(speech_result)
-        resp.say(ai_response, voice='alice', language='en-US')
-
-        if 'goodbye' in ai_response.lower() or 'thank you for calling' in ai_response.lower():
-            resp.say("Thank you for calling, goodbye!", voice='alice', language='en-US')
-            resp.hangup()
-        else:
-            # Continue the conversation by gathering more input
-            gather = resp.gather(action='/handle-response', input='speech', timeout=20, method='POST')
-            gather.say("How can I assist you further go?", voice='alice', language='en-US')
-            resp.append(gather)
-
-        # if should_end_call(ai_response):
-        #     resp.say("Thank you for calling, goodbye!", voice='alice', language='en-US')
-        #     resp.hangup()
-        # else:
-        #     # Continue the conversation by gathering more input
-        #     resp.gather(input='speech', action='/handle-response', timeout=20)
-
+    if "thank you for helping me" in speech_result:
+        thanks_response = "You're welcome! If you have anything else, just let me know."
+        path_to_speech = generate_speech(thanks_response, "thanks.mp3")
+        resp.play(url_for('static', filename=path_to_speech, _external=True))
     else:
-        resp.redirect('/no-response')
+        # Generate response based on AI and customer's input
+        ai_response = get_ai_response(speech_result)
+        path_to_speech = generate_speech(ai_response, "response.mp3")
+        resp.play(url_for('static', filename=path_to_speech, _external=True))
+
+        # Gather more input
+        gather = Gather(input='speech', action='/handle-response', timeout=20, speech_timeout='auto')
+        resp.append(gather)
 
     return str(resp)
 
@@ -163,6 +116,18 @@ def hand_up():
     resp.hangup()
 
     return str(resp)
+
+def generate_speech(text, filename):
+    """Generate speech using OpenAI and save to a static file."""
+    speech_file_path = Path(__file__).resolve().parent.parent / "static" / filename
+    response = openai.Audio.speech.create(
+        model="tts-1",
+        voice="alloy",
+        input=text
+    )
+    response.stream_to_file(speech_file_path)
+    return filename
+
 
 def should_end_call(ai_response):
     # Lowercase to standardize the input for comparison
