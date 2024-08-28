@@ -76,7 +76,7 @@ def handle_response():
         resp.play(url_for('static', filename=path_to_speech, _external=True))
 
         # Gather more input
-        gather = Gather(input='speech', action='/handle-response', timeout=20, speech_timeout='auto')
+        gather = Gather(input='speech', action='/handle-response', timeout=10, speech_timeout='auto')
         resp.append(gather)
 
     return str(resp)

@@ -20,9 +20,9 @@ def create_app():
 
     db.init_app(app)
 
-    if os.getenv('FLASK_ENV') == 'development':
-        with app.app_context():
-            db.create_all()  # Create tables if not already present
+    #if os.getenv('FLASK_ENV') == 'development':
+        #with app.app_context():
+            #db.create_all()  # Create tables if not already present
 
 
 
