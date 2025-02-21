@@ -32,6 +32,9 @@ def create_app():
     from app.routes.register import register_bp
     app.register_blueprint(register_bp, url_prefix='')
 
+    from app.routes.train-data import train_data_bp
+    app.register_blueprint(train_data_bp, url_prefix='')
+
 
     
     return app
