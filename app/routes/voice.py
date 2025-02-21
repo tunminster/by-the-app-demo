@@ -26,14 +26,13 @@ def get_ai_response(user_input):
 
         
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages={"role": "user", "content": user_input},
-            max_tokens=150,
-            temperature=0.7,
-            stop=None
+            model="gpt-4",
+            messsages = [{"role": "system", "content": "You are an AI assitant for an insurance company."},
+                         {"role": "user", "content": user_input}]
+        
         )
 
-        return response.choices[0].message.content
+        return response["choices"][0]["message"]["content"].strip()
     except Exception as e:
         print(e)
         return e.message
@@ -50,36 +49,30 @@ def voice():
 
     caller_number = request.values.get('From', 'Unknown')
 
-    gather = resp.gather(action='/handle-response', input='speech', timeout=10, method='POST')
+    gather = resp.gather(action='/handle-response', input='speech', speechTimeout="auto", method='POST')
 
-    greeting = "Welcome to ABC Bank, how can we assist you today?"
-    path_to_speech = generate_speech(greeting, "welcome.mp3")
+    greeting = "Welcome to Our Insurance support, how can we assist you today?"
+    gather.say(greeting)
 
-    gather.play(url_for('static', filename=path_to_speech, _external=True))
     resp.append(gather)
 
     return str(resp)
 
 @voice_bp.route("/handle-response", methods=['GET', 'POST'])
 def handle_response():
+    
+    user_speech = request.form.get("SpeechResult", "")
+    bot_reply = get_ai_response(user_speech)
+
     """Handle speech input from the user and response."""
     resp = VoiceResponse()
     
-    speech_result = request.values.get('SpeechResult', '').lower()
-    
-    if "thank you for helping me" in speech_result:
-        thanks_response = "You're welcome! If you have anything else, just let me know."
-        path_to_speech = generate_speech(thanks_response, "thanks.mp3")
-        resp.play(url_for('static', filename=path_to_speech, _external=True))
-    else:
-        # Generate response based on AI and customer's input
-        ai_response = get_ai_response(speech_result)
-        path_to_speech = generate_speech(ai_response, "response.mp3")
-        resp.play(url_for('static', filename=path_to_speech, _external=True))
+    resp.say(bot_reply)
 
-        # Gather more input
-        gather = Gather(input='speech', action='/handle-response', timeout=10, speech_timeout='auto')
-        resp.append(gather)
+    gather = Gather(input="speech", action="/handle-response", speechTimeout="auto")
+    gather.say("Would you like any further assistance?")
+    resp.append(gather)
+    
 
     return str(resp)
 
