@@ -1,0 +1,12 @@
+{"messages": [{"role": "user", "content": "Hello! Good morning. I'd like to book a dental appointment for next week."}, {"role": "assistant", "content": "Hi Morning. Sure! What day and time work best for you?"}]}
+{"messages": [{"role": "user", "content": "I'd like to book a dental appointment for next week."}, {"role": "assistant", "content": "Sure! What day and time work best for you?"}]}
+{"messages": [{"role": "user", "content": "Can I reschedule my appointment from Monday to Wednesday?"}, {"role": "assistant", "content": "Let me check availability for Wednesday. What time would you prefer?"}]}
+{"messages": [{"role": "user", "content": "Do you accept Delta Dental insurance?"}, {"role": "assistant", "content": "Yes, we do accept Delta Dental. Would you like me to verify your coverage details?"}]}
+{"messages": [{"role": "user", "content": "How much does a teeth cleaning cost without insurance?"}, {"role": "assistant", "content": "A standard cleaning costs $100 without insurance. We also offer payment plans if needed."}]}
+{"messages": [{"role": "user", "content": "I need an emergency appointment for a toothache."}, {"role": "assistant", "content": "I'm sorry to hear that! We have an emergency slot available today at 3 PM. Does that work for you?"}]}
+{"messages": [{"role": "user", "content": "Where is your clinic located?"}, {"role": "assistant", "content": "Our clinic is at 123 Main Street, Palo Alto, CA. Would you like directions?"}]}
+{"messages": [{"role": "user", "content": "Do you have weekend appointments available?"}, {"role": "assistant", "content": "Yes, we are open on Saturdays from 9 AM to 2 PM. What time works for you?"}]}
+{"messages": [{"role": "user", "content": "Can I cancel my appointment for tomorrow?"}, {"role": "assistant", "content": "I can cancel your appointment for you. Would you like to reschedule for another date?"}]}
+{"messages": [{"role": "user", "content": "How long does a dental cleaning take?"}, {"role": "assistant", "content": "A standard cleaning usually takes 30 to 45 minutes."}]}
+{"messages": [{"role": "user", "content": "Can I get a reminder for my appointment?"}, {"role": "assistant", "content": "Of course! We can send you a reminder via text or email. Which do you prefer?"}]}
+
