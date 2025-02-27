@@ -27,7 +27,7 @@ def get_ai_response(user_input):
         
         response = openai.chat.completions.create(
             model="gpt-4",
-            messsages = [{"role": "system", "content": "You are an AI assitant for an insurance company."},
+            messages = [{"role": "system", "content": "You are an AI assitant for an insurance company."},
                          {"role": "user", "content": user_input}]
         
         )
@@ -52,7 +52,7 @@ def voice():
     gather = resp.gather(action='/handle-response', input='speech', speechTimeout="auto", method='POST')
 
     greeting = "Welcome to Our Insurance support, how can we assist you today?"
-    gather.say(greeting)
+    gather.say(greeting, voice="Polly.Joanna", language="en-US")
 
     resp.append(gather)
 
@@ -61,16 +61,16 @@ def voice():
 @voice_bp.route("/handle-response", methods=['GET', 'POST'])
 def handle_response():
     
-    user_speech = request.form.get("SpeechResult", "")
+    user_speech = request.values.get("SpeechResult", "")
     bot_reply = get_ai_response(user_speech)
 
     """Handle speech input from the user and response."""
     resp = VoiceResponse()
     
-    resp.say(bot_reply)
+    resp.say(bot_reply, voice="Polly.Joanna", language="en-US")
 
     gather = Gather(input="speech", action="/handle-response", speechTimeout="auto")
-    gather.say("Would you like any further assistance?")
+    gather.say("Would you like any further assistance?", voice="Polly.Joanna", language="en-US")
     resp.append(gather)
     
 
