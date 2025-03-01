@@ -1,23 +1,40 @@
-flask>=2.0.3
-asgiref
-requests>=2.26.0
-twilio
-Werkzeug>=2.0
-gunicorn>=20.0
-openai
-Flask-Caching>=1.10.1
+fastapi
+uvicorn  # ASGI server to run FastAPI apps
+
+# Caching
+fastapi-cache2  
+
+# HTTP requests
+requests>=2.26.0  
+
+# Twilio for voice functionality
+twilio  
+
+# OpenAI for AI responses
+openai  
+
+# Azure dependencies (Storage, Tables, Key Vault, Identity)
 azure-storage-blob
 azure-data-tables
 azure-keyvault-secrets 
 azure-identity
+
+# Google Cloud services (TTS & Storage)
 google-cloud-texttospeech
 google-cloud-storage
-Flask-SQLAlchemy>=2.5.1
-pyodbc>=4.0.30
-pandas>=1.3.3
-ctransformers>=0.1.0
-fastapi
+
+# Database dependencies
+SQLAlchemy  # Replaces Flask-SQLAlchemy
+pyodbc>=4.0.30  # For SQL Server
+pandas>=1.3.3  # If you're using Pandas for data processing
+
+# Security
 bcrypt
-pydantic
-email-validator
-fastapi-cache2
+pydantic  # Data validation
+email-validator  # Required for Pydantic email validation
+
+# LLM support (if needed)
+ctransformers>=0.1.0  
+
+# ASGI compatibility
+asgiref  
