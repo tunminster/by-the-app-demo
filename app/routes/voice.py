@@ -48,13 +48,15 @@ def voice():
     resp = VoiceResponse()
 
     caller_number = request.values.get('From', 'Unknown')
-
-    gather = resp.gather(action='/handle-response', input='speech', speechTimeout="auto", method='POST')
-
     greeting = "Welcome to Our Insurance support, how can we assist you today?"
     gather.say(greeting, voice="Polly.Joanna", language="en-US")
 
+    gather = resp.gather(action='/handle-response', input='speech', speechTimeout="auto", method='POST')
     resp.append(gather)
+
+    # If user does not respond, repeat question and redirect
+    resp.say("I'm sorry, I didn't hear anything. Let me try again.", voice="Polly.Joanna", language="en-US")
+    resp.redirect("/voice") 
 
     return str(resp)
 
