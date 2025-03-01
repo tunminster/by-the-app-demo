@@ -20,4 +20,4 @@ fastapi
 bcrypt
 pydantic
 email-validator
-FastAPICache
+fastapi-cache2
