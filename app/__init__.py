@@ -1,10 +1,14 @@
 from flask import Flask
+from fastapi import FastAPI
 from .extensions import cache
 from .utils.db_setup import db, CallInfo
 import os
+from fastapi.routing import APIRouter
 
 def create_app():
-    app = Flask(__name__)
+    #app = Flask(__name__)
+
+    app = FastAPI()
 
     # Assuming config.py is at the root of your Flask app directory
     app.config.from_pyfile('config.py')
