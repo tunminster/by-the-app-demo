@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from .extensions import cache
+from fastapi_cache2 import FastAPICache
+from fastapi_cache2.backends.inmemory import InMemoryBackend
 from .utils.db_setup import db, CallInfo
 import os
 from fastapi.routing import APIRouter
@@ -13,8 +14,10 @@ app.state.config = {
     "AZURE_STORAGE_VOICE_CONTAINER":'bytheapp-voice-data'
 }
 
-# Initialize cache
-cache.init_app(app)
+# Initialize caching (alternative to Flask-Caching)
+@app.on_event("startup")
+async def startup():
+    FastAPICache.init(InMemoryBackend())
 
 # Database and table setup (if required)
 @app.on_event("startup")
