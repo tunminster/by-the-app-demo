@@ -1,6 +1,5 @@
-from app import create_app
-
-app = create_app()
+from app import app  # Import your FastAPI app from the main app module
 
 if __name__ == "__main__":
-    app.run(debug=True, host='0.0.0.0', port=80)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=80, reload=True)
