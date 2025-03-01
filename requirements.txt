@@ -18,3 +18,4 @@ ctransformers>=0.1.0
 fastapi
 bcrypt
 pydantic
+email-validator
