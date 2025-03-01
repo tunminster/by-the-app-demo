@@ -27,7 +27,7 @@ class UserSignUp(BaseModel):
 
 
 
-@register_bp.route("/signup", methods=['POST'])
+@register_bp.post("/signup") 
 async def signup(user: UserSignUp):
     # Hash password
     hashed_password = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
@@ -48,3 +48,4 @@ async def signup(user: UserSignUp):
     table_client.create_entity(entity=user_entity)
 
     return {"message": "User registered successfully"}
+
