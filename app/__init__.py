@@ -10,34 +10,32 @@ def create_app():
 
     app = FastAPI()
 
-    # Assuming config.py is at the root of your Flask app directory
-    app.config.from_pyfile('config.py')
+    # Load config from config.py directly
+    app.state.config = {
+        "AZURE_STORAGE_CONTAINER":'bytheapp-training-data',
+        "TRAINING_BLOB_DATA_FILE":'training_data.csv',
+        "AZURE_STORAGE_VOICE_CONTAINER":'bytheapp-voice-data'
+    }
 
-    # Configure and initialize caching
-    app.config['CACHE_TYPE'] = 'SimpleCache'
 
+   # Initialize cache
     cache.init_app(app)
 
-    app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"{os.environ.get('SQLALCHEMY_DATABASE_URI')}"
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+    # Database and table setup (if required)
+    @app.on_event("startup")
+    async def startup():
+        # Create tables if necessary
+        # db.create_all()  # Uncomment if needed with your DB setup
+        pass
 
-    db.init_app(app)
+    # Import routers and register them
+    from app.routes.voice import voice_router
+    from app.routes.register import register_router
+    from app.routes.train_data import train_data_router
 
-    #if os.getenv('FLASK_ENV') == 'development':
-        #with app.app_context():
-            #db.create_all()  # Create tables if not already present
-
-
-
-    from app.routes.voice import voice_bp
-    app.register_blueprint(voice_bp, url_prefix='')
-
-    from app.routes.register import register_bp
-    app.register_blueprint(register_bp, url_prefix='')
-
-    from app.routes.train_data import train_data_bp
-    app.register_blueprint(train_data_bp, url_prefix='')
+    app.include_router(voice_router, prefix="/voice", tags=["voice"])
+    app.include_router(register_router, prefix="/register", tags=["register"])
+    app.include_router(train_data_router, prefix="/train_data", tags=["train_data"])
 
 
     
