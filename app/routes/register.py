@@ -15,10 +15,10 @@ table_service = TableServiceClient.from_connection_string(AZURE_CONNECTION_STRIN
 table_client = table_service.get_table_client(TABLE_NAME)
 
 # Ensure table exists
-try:
-    table_client.create_table()
-except:
-    pass  # Ignore
+# try:
+#     table_client.create_table()
+# except:
+#     pass  # Ignore
 
 # User Signup Model
 class UserSignUp(BaseModel):
