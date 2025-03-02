@@ -1,7 +1,6 @@
 from fastapi import FastAPI
-from fastapi_cache2 import FastAPICache
-from fastapi_cache2.backends.inmemory import InMemoryBackend
-from .utils.db_setup import db, CallInfo
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.inmemory import InMemoryBackend
 import os
 from fastapi.routing import APIRouter
 from contextlib import asynccontextmanager
