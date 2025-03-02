@@ -27,7 +27,7 @@ class UserSignUp(BaseModel):
 
 
 
-@register_bp.post("/signup") 
+@register_router.post("/signup") 
 async def signup(user: UserSignUp):
     # Hash password
     hashed_password = bcrypt.hashpw(user.password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
