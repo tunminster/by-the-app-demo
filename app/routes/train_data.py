@@ -1,4 +1,3 @@
-from flask import Flask, request, Blueprint, url_for
 from app.utils.training_data_loader import get_cached_training_data
 
 train_data_bp = Blueprint('train_data_bp', __name__)

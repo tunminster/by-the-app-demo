@@ -5,7 +5,19 @@ from .utils.db_setup import db, CallInfo
 import os
 from fastapi.routing import APIRouter
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize caching
+    FastAPICache.init(InMemoryBackend())
+
+    # Setup database if needed
+    # db.create_all()  # Uncomment if your DB requires table creation
+    
+    yield  # App runs here
+    
+    # Cleanup actions (if necessary)
+
+app = FastAPI(lifespan=lifespan)
 
     # Load config from config.py directly
 app.state.config = {
@@ -14,17 +26,7 @@ app.state.config = {
     "AZURE_STORAGE_VOICE_CONTAINER":'bytheapp-voice-data'
 }
 
-# Initialize caching (alternative to Flask-Caching)
-@app.on_event("startup")
-async def startup():
-    FastAPICache.init(InMemoryBackend())
 
-# Database and table setup (if required)
-@app.on_event("startup")
-async def startup():
-    # Create tables if necessary
-    # db.create_all()  # Uncomment if needed with your DB setup
-    pass
 
 # Import routers and register them
 from app.routes.voice import voice_router
