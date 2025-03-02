@@ -11,6 +11,6 @@ def train_data():
     return {"message": "Training data updated successfully!"}
 
 @train_data_router.get("/download")
-def train_data():
+def train_data_dowload():
     training_data = get_cached_training_data()
     return {"message": "Training data downloaded successfully!"}
