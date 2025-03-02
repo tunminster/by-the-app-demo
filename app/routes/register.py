@@ -1,11 +1,11 @@
-from flask import Blueprint
-from fastapi import FastAPI, HTTPException
+from fastapi import APIRouter, HTTPException
 from azure.data.tables import TableServiceClient
 import bcrypt
 import os
 from pydantic import BaseModel, EmailStr
 
-register_bp = Blueprint('register_bp', __name__)
+# FastAPI Router for registration
+register_router = APIRouter()
 
 AZURE_CONNECTION_STRING = os.getenv('BYTHEAPP_AZURE_STORAGE_CONNECTION_STRING')
 TABLE_NAME = "Users"

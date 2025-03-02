@@ -1,10 +1,11 @@
+from fastapi import APIRouter
 from app.utils.training_data_loader import get_cached_training_data
 
-train_data_bp = Blueprint('train_data_bp', __name__)
+# FastAPI router for training data
+train_data_router = APIRouter()
 
-@train_data_bp.route("/train-data/upload", methods=['GET'])
+# Route to upload training data
+@train_data_router.get("/train-data/upload")
 def train_data():
     training_data = get_cached_training_data()
-
-    
-    return "Training data updated successfully!"
+    return {"message": "Training data updated successfully!"}
