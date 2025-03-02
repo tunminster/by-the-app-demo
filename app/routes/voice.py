@@ -11,8 +11,7 @@ from pathlib import Path
 from fastapi.routing import APIRouter
 
 # Initialize FastAPI app
-app = FastAPI()
-
+voice_router = APIRouter()
 # Set OpenAI API key
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 
@@ -37,7 +36,7 @@ def get_ai_response(user_input):
         return e.message
 
 # Twilio voice route (main entry)
-@app.post("/voice")
+@voice_router.post("/voice")
 @validate_twilio_request
 async def voice(request: Request):
     """Respond to incoming phone calls with a menu of options"""
@@ -58,7 +57,7 @@ async def voice(request: Request):
     return PlainTextResponse(str(resp))
 
 # Handle user response after gathering input
-@app.post("/handle-response")
+@voice_router.post("/handle-response")
 async def handle_response(request: Request):
     user_speech = request.query_params.get("SpeechResult", "")
     bot_reply = get_ai_response(user_speech)
@@ -74,7 +73,7 @@ async def handle_response(request: Request):
     return PlainTextResponse(str(resp))
 
 # Route when no response is detected
-@app.post("/no-response")
+@voice_router.post("/no-response")
 async def no_response():
     resp = VoiceResponse()
 
@@ -88,7 +87,7 @@ async def no_response():
     return PlainTextResponse(str(resp))
 
 # Final warning route when there’s still no response
-@app.post("/final-warning")
+@voice_router.post("/final-warning")
 async def final_warning():
     resp = VoiceResponse()
 
@@ -102,7 +101,7 @@ async def final_warning():
     return PlainTextResponse(str(resp))
 
 # Hang-up route
-@app.post("/hang-up")
+@voice_router.post("/hang-up")
 async def hang_up():
     resp = VoiceResponse()
     resp.say("No response detected, we are now disconnecting the call. Goodbye!", voice='alice', language='en-US')
