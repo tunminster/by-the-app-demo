@@ -46,7 +46,7 @@ async def voice(request: Request):
     # Get caller number
     caller_number = request.query_params.get('From', 'Unknown')
     greeting = "Welcome to Our Insurance support, how can we assist you today?"
-    gather = Gather(action='/handle-response', input='speech', speechTimeout="auto", method='POST')
+    gather = Gather(action='/voice/handle-response', input='speech', speechTimeout="auto", method='POST')
     gather.say(greeting, voice="Polly.Joanna", language="en-US")
     resp.append(gather)
 
@@ -66,7 +66,7 @@ async def handle_response(request: Request):
     resp = VoiceResponse()
     resp.say(bot_reply, voice="Polly.Joanna", language="en-US")
 
-    gather = Gather(input="speech", action="/handle-response", speechTimeout="auto")
+    gather = Gather(input="speech", action="/voice/handle-response", speechTimeout="auto")
     gather.say("Would you like any further assistance?", voice="Polly.Joanna", language="en-US")
     resp.append(gather)
 
@@ -78,7 +78,7 @@ async def no_response():
     resp = VoiceResponse()
 
     # First attempt to re-engage
-    gather = resp.gather(action='/handle-response', method='POST', input='speech', timeout=20)
+    gather = resp.gather(action='/voice/handle-response', method='POST', input='speech', timeout=20)
     gather.say("Hello, are you still there? Please let us know how we can assist you.", voice='alice', language='en-US')
 
     # If still no response, redirect to a final warning route
@@ -92,7 +92,7 @@ async def final_warning():
     resp = VoiceResponse()
 
     # Final attempt to re-engage
-    gather = resp.gather(action='/handle-response', method='POST', input='speech', timeout=20)
+    gather = resp.gather(action='/voice/handle-response', method='POST', input='speech', timeout=20)
     gather.say("We have not heard from you. Please speak to continue. We will disconnect the call in 2 minutes if there is no response.", voice='alice', language='en-US')
 
     # Set up the hang-up if no response after final warning
