@@ -1,4 +1,3 @@
-from flask import Flask, request
 from twilio.twiml.voice_response import VoiceResponse
 from app.utils.decorators import require_api_key
 from app.utils.decorators_twilio_auth import validate_twilio_request

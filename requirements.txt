@@ -38,3 +38,5 @@ ctransformers>=0.1.0
 
 # ASGI compatibility
 asgiref  
+
+asynccontextmanager
