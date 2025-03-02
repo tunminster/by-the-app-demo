@@ -7,7 +7,6 @@ import openai
 import os
 from app.utils.speech_services import synthesize_speech
 from app.utils.db_gather_info_helpers import VoiceHelper
-from app.utils.db_setup import db
 from pathlib import Path
 from fastapi.routing import APIRouter
 
