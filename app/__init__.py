@@ -23,7 +23,7 @@ async def lifespan(app: FastAPI):
     
     # Cleanup actions (if necessary)
 
-async def create_app():
+def create_app():
     app = FastAPI(lifespan=lifespan)
 
     # Load config from config.py directly
