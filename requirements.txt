@@ -2,7 +2,7 @@ fastapi
 uvicorn  # ASGI server to run FastAPI apps
 
 # Caching
-fastapi-cache2  
+fastapi-cache
 
 # HTTP requests
 requests>=2.26.0  
