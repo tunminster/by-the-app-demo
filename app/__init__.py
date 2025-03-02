@@ -37,5 +37,9 @@ def create_app():
     app.include_router(register_router, prefix="/register", tags=["register"])
     app.include_router(train_data_router, prefix="/train_data", tags=["train_data"])
 
+    print("📌 Registered Routes:")
+    for route in app.routes:
+        print(f"{route.path} -> {route.name} ({route.methods})")
+
     return app
 
