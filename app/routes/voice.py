@@ -16,9 +16,9 @@ voice_router = APIRouter()
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 # Helper function to get AI response
-def get_ai_response(user_input):
+async def get_ai_response(user_input):
     try:
-        training_data = get_cached_training_data()
+        training_data = await get_cached_training_data()
 
         # Prepare the conversation history as a prompt
         conversation_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in training_data])
@@ -60,7 +60,7 @@ async def voice(request: Request):
 @voice_router.post("/handle-response")
 async def handle_response(request: Request):
     user_speech = request.query_params.get("SpeechResult", "")
-    bot_reply = get_ai_response(user_speech)
+    bot_reply = await get_ai_response(user_speech)
 
     """Handle speech input from the user and response."""
     resp = VoiceResponse()
