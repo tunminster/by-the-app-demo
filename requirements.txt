@@ -40,4 +40,5 @@ ctransformers>=0.1.0
 asgiref  
 
 python-multipart
+PyJWT
 
