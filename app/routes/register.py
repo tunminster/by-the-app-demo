@@ -5,7 +5,7 @@ import os
 from pydantic import BaseModel, EmailStr
 import jwt
 from datetime import datetime, timedelta
-from utils.azure_utils import get_jwt_secret_key
+from app.utils.azure_utils import get_jwt_secret_key
 
 
 # FastAPI Router for registration
