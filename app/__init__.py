@@ -9,6 +9,8 @@ from contextlib import asynccontextmanager
 from app.routes.voice import voice_router
 from app.routes.register import register_router
 from app.routes.train_data import train_data_router
+from fastapi.middleware.cors import CORSMiddleware
+
 
 
 @asynccontextmanager
@@ -36,6 +38,14 @@ def create_app():
     app.include_router(voice_router, prefix="/voice", tags=["voice"])
     app.include_router(register_router, prefix="/register", tags=["register"])
     app.include_router(train_data_router, prefix="/train_data", tags=["train_data"])
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Allow only your frontend domain
+        allow_credentials=True,
+        allow_methods=["*"],  # Allow all HTTP methods
+        allow_headers=["*"],  # Allow all headers
+    )
 
     print("📌 Registered Routes:")
     for route in app.routes:
