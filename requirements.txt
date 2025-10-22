@@ -43,8 +43,8 @@ python-multipart
 PyJWT
 
 python-dotenv
-postgresql
+
 psycopg2
-dotenv
+
 websockets
 
