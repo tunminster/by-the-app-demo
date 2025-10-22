@@ -1,54 +1,43 @@
-# db.py
+import psycopg2
+from psycopg2.extras import RealDictCursor
 import os
-import pyodbc
 from dotenv import load_dotenv
 
 load_dotenv()
 
-conn_str = (
-    f"DRIVER={{{os.getenv('AZURE_SQL_DRIVER')}}};"
-    f"SERVER={os.getenv('AZURE_SQL_SERVER')};"
-    f"DATABASE={os.getenv('AZURE_SQL_DATABASE')};"
-    f"UID={os.getenv('AZURE_SQL_USERNAME')};"
-    f"PWD={os.getenv('AZURE_SQL_PASSWORD')};"
-    f"Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;"
+conn = psycopg2.connect(
+    dbname=os.getenv("POSTGRES_DB"),
+    user=os.getenv("POSTGRES_USER"),
+    password=os.getenv("POSTGRES_PASSWORD"),
+    host=os.getenv("POSTGRES_HOST"),
+    port=os.getenv("POSTGRES_PORT", 5432)
 )
+conn.autocommit = True
 
-conn = pyodbc.connect(conn_str)
-
-def fetch_available_slots(limit: int = 5):
-    with conn.cursor() as cur:
+def fetch_available_slots(limit=5):
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            SELECT TOP (?) d.id, d.name, a.date, a.start_time, a.end_time
-            FROM Availability a
-            JOIN Dentists d ON a.dentist_id = d.id
-            WHERE a.is_booked = 0
+            SELECT d.id AS dentist_id, d.name AS dentist_name,
+                   a.date, a.start_time, a.end_time
+            FROM availability a
+            JOIN dentists d ON a.dentist_id = d.id
+            WHERE a.is_booked = FALSE
             ORDER BY a.date, a.start_time
+            LIMIT %s
         """, (limit,))
-        rows = cur.fetchall()
-        return [
-            {
-                "dentist_id": r[0],
-                "dentist_name": r[1],
-                "date": r[2],
-                "start_time": str(r[3]),
-                "end_time": str(r[4])
-            } for r in rows
-        ]
+        return cur.fetchall()
 
-def mark_slot_booked(dentist_id: int, date: str, time: str):
+def mark_slot_booked(dentist_id, date, time):
     with conn.cursor() as cur:
         cur.execute("""
-            UPDATE Availability
-            SET is_booked = 1
-            WHERE dentist_id = ? AND date = ? AND start_time = ?
+            UPDATE availability
+            SET is_booked = TRUE
+            WHERE dentist_id=%s AND date=%s AND start_time=%s
         """, (dentist_id, date, time))
-        conn.commit()
 
-def insert_appointment(dentist_id: int, patient_name: str, date: str, time: str):
+def insert_appointment(dentist_id, patient_name, date, time):
     with conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO Appointments (dentist_id, patient_name, appointment_date, appointment_time)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO appointments (dentist_id, patient_name, appointment_date, appointment_time)
+            VALUES (%s, %s, %s, %s)
         """, (dentist_id, patient_name, date, time))
-        conn.commit()

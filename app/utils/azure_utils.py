@@ -24,6 +24,7 @@ def get_jwt_secret_key():
     key_vault_uri = f"https://{key_vault_name}.vault.azure.net/"
 
     azure_client_id = os.environ.get('AZURE_CLIENT_ID')
+    print(" azure_client_id ", azure_client_id)
     azure_client_secret = os.environ.get('AZURE_CLIENT_SECRET')
     azure_tenant_id = os.environ.get('AZURE_TENANT_ID')
 

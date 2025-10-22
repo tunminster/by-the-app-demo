@@ -48,7 +48,7 @@ async def get_ai_response(user_input):
 # Twilio voice route (main entry)
 #@voice_router.post("/voice")
 @voice_router.post("/incoming-call")
-@validate_twilio_request
+#@validate_twilio_request
 async def voice(request: Request):
     """
     Twilio will call this webhook when a call arrives.
@@ -75,7 +75,7 @@ async def media_stream(ws: WebSocket):
     await ws.accept()
     openai_ws = await websockets.connect(
         "wss://api.openai.com/v1/realtime",
-        extra_headers={
+        additional_headers={
             "Authorization": f"Bearer {OPENAI_API_KEY}",
             "OpenAI-Beta": "realtime=v1"
         }
@@ -86,12 +86,11 @@ async def media_stream(ws: WebSocket):
     # See OpenAI’s Realtime API docs for “session.update” message format :contentReference[oaicite:1]{index=1}
     session_init = {
         "type": "session.update",
-        "voice_config": {
-            "voice": VOICE
-        },
-        "system_message": {"role": "system", "content": SYSTEM_MESSAGE},
-        # Optionally: start with a greeting
-    }
+        "model": "gpt-4o-realtime-preview",  # REQUIRED
+        "voice": "verse",                     # Optional, TTS voice
+        "metadata": {},                        # optional
+        "instructions": SYSTEM_MESSAGE         # system instructions / greeting
+        }
     await openai_ws.send(json.dumps(session_init))
 
     # When you want to inject availability context mid-conversation, you can send
