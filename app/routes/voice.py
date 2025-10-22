@@ -66,94 +66,89 @@ async def voice(request: Request):
     return HTMLResponse(content=str(vr), media_type="application/xml")
 
 @voice_router.websocket("/media-stream")
-async def media_stream(ws: WebSocket):
+async def media_stream(websocket: WebSocket):
     """
     WebSocket endpoint Twilio will send media to.
     We’ll also connect to OpenAI Realtime and proxy audio both ways.
     We’ll insert booking logic by interjecting system/context messages if needed.
     """
-    await ws.accept()
-    openai_ws = await websockets.connect(
-        "wss://api.openai.com/v1/realtime",
-        additional_headers={
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
-            "OpenAI-Beta": "realtime=v1"
-        }
+    await websocket.accept()
+    print("🎧 Client connected to /media-stream")
 
-    )
+    openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
+    headers = [("Authorization", f"Bearer {OPENAI_API_KEY}")]
 
-    # Step: initialize the OpenAI session
-    # See OpenAI’s Realtime API docs for “session.update” message format :contentReference[oaicite:1]{index=1}
-    session_init = {
-        "type": "session.update",
-        "model": "gpt-4o-realtime-preview",  # REQUIRED
-        "voice": "verse",                     # Optional, TTS voice
-        "metadata": {},                        # optional
-        "instructions": SYSTEM_MESSAGE         # system instructions / greeting
-        }
-    await openai_ws.send(json.dumps(session_init))
+    try:
+        async with websockets.connect(openai_ws_url, additional_headers=headers) as openai_ws:
+            print("🔗 Connected to OpenAI Realtime API")
 
-    # When you want to inject availability context mid-conversation, you can send
-    # "conversation.item.create" messages manually (you'll see below)
+            # 1️⃣ Initialize session
+            session_init = {
+                "type": "session.update",
+                "model": "gpt-4o-realtime-preview",
+                "voice": VOICE,
+                "instructions": SYSTEM_MESSAGE,
+                "metadata": {}
+            }
+            await openai_ws.send(json.dumps(session_init))
+            print("📤 Sent session.init to OpenAI")
 
-    async def forward_twilio_to_openai():
-        async for msg in ws.iter_text():
-            data = json.loads(msg)
-            if data.get("event") == "media":
-                # It's audio chunk from Twilio; forward to OpenAI
-                await openai_ws.send(json.dumps({
-                    "type": "input.audio",
-                    "audio": data["media"]["payload"],
-                    "stream_sid": data["streamSid"],
-                    "timestamp": data["media"]["timestamp"]
-                }))
+            session_id = None
 
-    async def forward_openai_to_twilio():
-        async for msg in openai_ws:
-            data = json.loads(msg)
-            # Log or debug events if you want
-            # If we get "response.audio" from OpenAI, send back to Twilio
-            if data.get("type") == "response.audio":
-                # wrap in Twilio WebSocket protocol (send back via ws)
-                await ws.send_text(json.dumps({
-                    "event": "media",
-                    "media": {
-                        "payload": data["audio"]["payload"],
-                        "timestamp": data["audio"]["timestamp"]
-                    }
-                }))
-            # Also, we can watch for when OpenAI has generated "text" messages
-            # (for us to intercept and apply booking logic)
-            if data.get("type") == "response.content":
-                reply_text = data["text"]["content"]
-                # Check if AI’s last utterance indicates “booking”
-                intent = parse_booking_intent(reply_text)
-                if intent:
-                    success = book_if_possible(intent)
-                    if success:
-                        # If booking succeeded, we might want to send a confirmation
-                        confirm_text = f"Your appointment is booked with {intent['dentist']} on {intent['date']} at {intent['time']}. Thank you!"
-                        # Inject text as a message in the convo
-                        await openai_ws.send(json.dumps({
-                            "type": "conversation.item.create",
-                            "role": "assistant",
-                            "content": {"type": "text", "text": confirm_text}
-                        }))
+            async def forward_openai_to_client():
+                nonlocal session_id
+                while True:
+                    message = await openai_ws.recv()
+                    event = json.loads(message)
+
+                    # Capture session ID when created
+                    if event.get("type") == "session.created":
+                        session_id = event["session"]["id"]
+                        print("✅ Session created:", session_id)
+
+                    # Forward all other events to client
                     else:
-                        # If booking failed, ask clarifying question
-                        msg = "I’m sorry, I couldn’t book that slot -- is there another time or dentist that works?"
-                        await openai_ws.send(json.dumps({
-                            "type": "conversation.item.create",
-                            "role": "assistant",
-                            "content": {"type": "text", "text": msg}
-                        }))
-            # You may also handle other event types (e.g. input_audio_buffer.speech_stopped) for interruptions
+                        await websocket.send_text(json.dumps(event))
 
-            # Kick off both coroutines
-            try:
-                await asyncio.gather(forward_twilio_to_openai(), forward_openai_to_twilio())
-            except WebSocketDisconnect:
-                pass
-            finally:
-                await openai_ws.close()
-                await ws.close()
+            async def forward_client_to_openai():
+                nonlocal session_id
+                while True:
+                    data = await websocket.receive_text()
+                    print("📩 From client:", data)
+
+                    if not session_id:
+                        print("❌ Session not ready yet, cannot send message")
+                        continue
+
+                    # Send user message to OpenAI Realtime
+                    event = {
+                        "type": "response.create",
+                        "response": {
+                            "conversation": "none",         # or "none"
+                            "output_modalities": ["text"],    # specify what you want back
+                            "input": [
+                                {
+                                    "type": "message",
+                                    "role": "user",
+                                    "content": [
+                                        {
+                                            "type": "input_text",
+                                            "text": data
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                    await openai_ws.send(json.dumps(event))
+
+            await asyncio.gather(
+                forward_openai_to_client(),
+                forward_client_to_openai()
+            )
+
+    except websockets.ConnectionClosedError as e:
+        print("❌ OpenAI WebSocket closed:", e)
+    finally:
+        await websocket.close()
+        print("🛑 Client disconnected")
