@@ -53,8 +53,8 @@ PyJWT[crypto]  # Ensure JWT includes cryptographic support
 python-dotenv  # (Optional) Environment variable management
 
 python-dotenv
-postgresql
+
 psycopg2
-dotenv
+
 websockets
 
