@@ -10,6 +10,7 @@ from app.routes.voice import voice_router
 from app.routes.register import register_router
 from app.routes.train_data import train_data_router
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
 
 
 
@@ -49,7 +50,10 @@ def create_app():
 
     print("📌 Registered Routes:")
     for route in app.routes:
-        print(f"{route.path} -> {route.name} ({route.methods})")
+        if hasattr(route, "methods"):
+            print(f"{route.path} -> {route.name} ({route.methods})")
+        else:
+            print(f"{route.path} -> {route.name} (WebSocket or custom route)")
 
     return app
 
