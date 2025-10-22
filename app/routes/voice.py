@@ -1,19 +1,29 @@
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import PlainTextResponse
-from twilio.twiml.voice_response import VoiceResponse, Gather
+import os
+import json
+import asyncio
+import websockets
+from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import PlainTextResponse, HTMLResponse
+from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream, Gather
 from app.utils.decorators_twilio_auth import validate_twilio_request
 from app.utils.training_data_loader import get_cached_training_data
 import openai
-import os
+
+
 from app.utils.speech_services import synthesize_speech
-from app.utils.db_gather_info_helpers import VoiceHelper
 from pathlib import Path
 from fastapi.routing import APIRouter
+from app.utils.db import fetch_available_slots
+from app.utils.booking import build_context_text, parse_booking_intent, book_if_possible
 
 # Initialize FastAPI app
 voice_router = APIRouter()
 # Set OpenAI API key
 openai.api_key = os.environ.get('OPENAI_API_KEY')
+OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
+SYSTEM_MESSAGE = "You are a helpful dental receptionist. Use the availability to schedule appointments for patients. Ask clarifying questions if needed."
+VOICE = "alloy"
+PORT = int(os.getenv("PORT", 5050))
 
 # Helper function to get AI response
 async def get_ai_response(user_input):
@@ -36,94 +46,115 @@ async def get_ai_response(user_input):
         return e.message
 
 # Twilio voice route (main entry)
-@voice_router.post("/voice")
+#@voice_router.post("/voice")
+@voice_router.post("/incoming-call")
 @validate_twilio_request
 async def voice(request: Request):
-    """Respond to incoming phone calls with a menu of options"""
-    # Start our TwiML response
-    resp = VoiceResponse()
+    """
+    Twilio will call this webhook when a call arrives.
+    We'll return TwiML to instruct Twilio to stream media to our /media-stream WS endpoint.
+    """
+    host = request.url.hostname
+    vr = VoiceResponse()
 
-    # Get caller number
-    caller_number = request.query_params.get('From', 'Unknown')
-    greeting = "Welcome to Our Insurance support, how can we assist you today?"
-    gather = Gather(action='/voice/handle-response', input='speech', speechTimeout="auto", method='POST')
-    gather.say(greeting, voice="Polly.Joanna", language="en-US")
-    resp.append(gather)
+    vr.say("Welcome to the dental office. Please wait while we connect you to our AI assistant.", voice=VOICE)
+    connect = Connect()
 
-    # If user does not respond, repeat question and redirect
-    resp.say("I'm sorry, I didn't hear anything. Let me try again.", voice="Polly.Joanna", language="en-US")
-    resp.redirect("/voice")
+    connect.stream(url=f"wss://{host}/media-stream")
+    vr.append(connect)
 
-    return PlainTextResponse(str(resp))
+    return HTMLResponse(content=str(vr), media_type="application/xml")
 
-# Handle user response after gathering input
-@voice_router.post("/handle-response")
-async def handle_response(request: Request):
-    user_speech = request.query_params.get("SpeechResult", "")
-    bot_reply = await get_ai_response(user_speech)
+@voice_router.websocket("/media-stream")
+async def media_stream(ws: WebSocket):
+    """
+    WebSocket endpoint Twilio will send media to.
+    We’ll also connect to OpenAI Realtime and proxy audio both ways.
+    We’ll insert booking logic by interjecting system/context messages if needed.
+    """
+    await ws.accept()
+    openai_ws = await websockets.connect(
+        "wss://api.openai.com/v1/realtime",
+        extra_headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "OpenAI-Beta": "realtime=v1"
+        }
 
-    """Handle speech input from the user and response."""
-    resp = VoiceResponse()
-    resp.say(bot_reply, voice="Polly.Joanna", language="en-US")
-
-    gather = Gather(input="speech", action="/voice/handle-response", speechTimeout="auto")
-    gather.say("Would you like any further assistance?", voice="Polly.Joanna", language="en-US")
-    resp.append(gather)
-
-    return PlainTextResponse(str(resp))
-
-# Route when no response is detected
-@voice_router.post("/no-response")
-async def no_response():
-    resp = VoiceResponse()
-
-    # First attempt to re-engage
-    gather = resp.gather(action='/voice/handle-response', method='POST', input='speech', timeout=20)
-    gather.say("Hello, are you still there? Please let us know how we can assist you.", voice='alice', language='en-US')
-
-    # If still no response, redirect to a final warning route
-    resp.redirect('/final-warning')
-
-    return PlainTextResponse(str(resp))
-
-# Final warning route when there’s still no response
-@voice_router.post("/final-warning")
-async def final_warning():
-    resp = VoiceResponse()
-
-    # Final attempt to re-engage
-    gather = resp.gather(action='/voice/handle-response', method='POST', input='speech', timeout=20)
-    gather.say("We have not heard from you. Please speak to continue. We will disconnect the call in 2 minutes if there is no response.", voice='alice', language='en-US')
-
-    # Set up the hang-up if no response after final warning
-    resp.redirect('/hang-up')
-
-    return PlainTextResponse(str(resp))
-
-# Hang-up route
-@voice_router.post("/hang-up")
-async def hang_up():
-    resp = VoiceResponse()
-    resp.say("No response detected, we are now disconnecting the call. Goodbye!", voice='alice', language='en-US')
-    resp.hangup()
-
-    return PlainTextResponse(str(resp))
-
-# Function to generate speech and save to a file
-def generate_speech(text, filename):
-    """Generate speech using OpenAI and save to a static file."""
-    speech_file_path = Path(__file__).resolve().parent.parent / "static" / filename
-    response = openai.audio.speech.create(
-        model="tts-1",
-        voice="alloy",
-        input=text
     )
-    response.stream_to_file(speech_file_path)
-    return filename
 
-# Helper function to check if the call should end
-def should_end_call(ai_response):
-    lower_response = ai_response.lower()
-    if "goodbye" in lower_response or "goodbye!" in lower_response:
-        return True
-    return False
+    # Step: initialize the OpenAI session
+    # See OpenAI’s Realtime API docs for “session.update” message format :contentReference[oaicite:1]{index=1}
+    session_init = {
+        "type": "session.update",
+        "voice_config": {
+            "voice": VOICE
+        },
+        "system_message": {"role": "system", "content": SYSTEM_MESSAGE},
+        # Optionally: start with a greeting
+    }
+    await openai_ws.send(json.dumps(session_init))
+
+    # When you want to inject availability context mid-conversation, you can send
+    # "conversation.item.create" messages manually (you'll see below)
+
+    async def forward_twilio_to_openai():
+        async for msg in ws.iter_text():
+            data = json.loads(msg)
+            if data.get("event") == "media":
+                # It's audio chunk from Twilio; forward to OpenAI
+                await openai_ws.send(json.dumps({
+                    "type": "input.audio",
+                    "audio": data["media"]["payload"],
+                    "stream_sid": data["streamSid"],
+                    "timestamp": data["media"]["timestamp"]
+                }))
+
+    async def forward_openai_to_twilio():
+        async for msg in openai_ws:
+            data = json.loads(msg)
+            # Log or debug events if you want
+            # If we get "response.audio" from OpenAI, send back to Twilio
+            if data.get("type") == "response.audio":
+                # wrap in Twilio WebSocket protocol (send back via ws)
+                await ws.send_text(json.dumps({
+                    "event": "media",
+                    "media": {
+                        "payload": data["audio"]["payload"],
+                        "timestamp": data["audio"]["timestamp"]
+                    }
+                }))
+            # Also, we can watch for when OpenAI has generated "text" messages
+            # (for us to intercept and apply booking logic)
+            if data.get("type") == "response.content":
+                reply_text = data["text"]["content"]
+                # Check if AI’s last utterance indicates “booking”
+                intent = parse_booking_intent(reply_text)
+                if intent:
+                    success = book_if_possible(intent)
+                    if success:
+                        # If booking succeeded, we might want to send a confirmation
+                        confirm_text = f"Your appointment is booked with {intent['dentist']} on {intent['date']} at {intent['time']}. Thank you!"
+                        # Inject text as a message in the convo
+                        await openai_ws.send(json.dumps({
+                            "type": "conversation.item.create",
+                            "role": "assistant",
+                            "content": {"type": "text", "text": confirm_text}
+                        }))
+                    else:
+                        # If booking failed, ask clarifying question
+                        msg = "I’m sorry, I couldn’t book that slot -- is there another time or dentist that works?"
+                        await openai_ws.send(json.dumps({
+                            "type": "conversation.item.create",
+                            "role": "assistant",
+                            "content": {"type": "text", "text": msg}
+                        }))
+            # You may also handle other event types (e.g. input_audio_buffer.speech_stopped) for interruptions
+
+            # Kick off both coroutines
+            try:
+                await asyncio.gather(forward_twilio_to_openai(), forward_openai_to_twilio())
+            except WebSocketDisconnect:
+                pass
+            finally:
+                await openai_ws.close()
+                await ws.close()

@@ -42,3 +42,7 @@ asgiref
 python-multipart
 PyJWT
 
+python-dotenv
+pyodbc
+websockets
+
