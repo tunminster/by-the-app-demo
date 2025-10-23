@@ -60,7 +60,7 @@ async def voice(request: Request):
     vr.say("Welcome to the dental office. Please wait while we connect you to our AI assistant.", voice=VOICE)
     connect = Connect()
 
-    connect.stream(url=f"wss://{host}/media-stream")
+    connect.stream(url=f"wss://{host}/voice/media-stream")
     vr.append(connect)
 
     return HTMLResponse(content=str(vr), media_type="application/xml")
