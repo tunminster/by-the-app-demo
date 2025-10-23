@@ -22,4 +22,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 #CMD ["python", "run.py"]
-CMD ["uvicorn", "app:create_app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
+CMD ["uvicorn", "app:create_app", "--host", "0.0.0.0", "--port", "80", "--reload"]
