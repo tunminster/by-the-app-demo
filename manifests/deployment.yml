@@ -20,7 +20,7 @@ spec:
             memory: "256Mi" # Adjusted memory limit
             cpu: "100m"    # Adjusted CPU limit
         ports:
-        - containerPort: 80
+        - containerPort: 8080
         env:
         - name: OPENAI_API_KEY
           value: #{openai-api-key}#
@@ -44,6 +44,16 @@ spec:
           value: development
         - name: SECRET_KEY
           value: #{db-secret-key}#
+        - name: POSTGRES_DB
+          value: defaultdb
+        - name: POSTGRES_USER
+          value: avnadmin
+        - name: POSTGRES_PASSWORD
+          value: #{POSTGRES-PASSWORD}#
+        - name: POSTGRES_HOST
+          value: #{POSTGRES-HOST}#
+        - name: POSTGRES_PORT
+          value: #{POSTGRES-PORT}#
       imagePullSecrets:
         - name: #{acr-secret-name}#
 
