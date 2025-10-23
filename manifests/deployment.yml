@@ -53,7 +53,7 @@ spec:
         - name: POSTGRES_HOST
           value: #{POSTGRES-HOST}#
         - name: POSTGRES_PORT
-          value: #{POSTGRES-PORT}#
+          value: "28370"
       imagePullSecrets:
         - name: #{acr-secret-name}#
 
