@@ -86,8 +86,8 @@ spec:
       nginx.ingress.kubernetes.io/configuration-snippet: |
           proxy_set_header Upgrade $http_upgrade;
           proxy_set_header Connection "Upgrade";
-
-      
+      nginx.ingress.kubernetes.io/rewrite-target: /$1
+      nginx.ingress.kubernetes.io/use-regex: "true"
 
     name: by-the-app-api-demo-ingress
     namespace: #{env-namespace}#
