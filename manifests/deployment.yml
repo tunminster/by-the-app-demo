@@ -77,11 +77,11 @@ spec:
     name: by-the-app-api-demo-ingress
     annotations:
       kubernetes.io/ingress.class: nginx
+      nginx.ingress.kubernetes.io/upgrade: "websocket"
+      nginx.ingress.kubernetes.io/connection: "upgrade"
       nginx.ingress.kubernetes.io/proxy-connect-timeout: "120"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "86400"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
-      nginx.ingress.kubernetes.io/upgrade: "websocket"
-      nginx.ingress.kubernetes.io/connection: "upgrade"
       nginx.ingress.kubernetes.io/upstream-hash-by: '$remote_addr' 
 
       # Session affinity for WebSocket
