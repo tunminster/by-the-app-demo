@@ -20,7 +20,7 @@ spec:
             memory: "256Mi" # Adjusted memory limit
             cpu: "100m"    # Adjusted CPU limit
         ports:
-        - containerPort: 8080
+        - containerPort: 80
         env:
         - name: OPENAI_API_KEY
           value: #{openai-api-key}#
@@ -57,7 +57,7 @@ spec:
     app: by-the-app-api-demo
   ports:
   - port: 80
-    targetPort: 8080
+    targetPort: 80
 
 
 ---
