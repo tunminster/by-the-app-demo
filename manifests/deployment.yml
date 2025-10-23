@@ -57,7 +57,7 @@ spec:
     app: by-the-app-api-demo
   ports:
   - port: 80
-    targetPort: 80
+    targetPort: 8080
 
 
 ---
