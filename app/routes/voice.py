@@ -2,6 +2,7 @@ import os
 import json
 import asyncio
 import websockets
+import base64
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream, Gather
@@ -95,56 +96,59 @@ async def media_stream(websocket: WebSocket):
 
             session_id = None
 
-            async def forward_openai_to_client():
-                nonlocal session_id
+            async def handle_openai_responses():
                 while True:
-                    message = await openai_ws.recv()
-                    event = json.loads(message)
+                    msg = await openai_ws.recv()
+                    event = json.loads(msg)
 
-                    # Capture session ID when created
+                    # Capture session ID
                     if event.get("type") == "session.created":
+                        nonlocal session_id
                         session_id = event["session"]["id"]
-                        print("✅ Session created:", session_id)
+                        print("✅ OpenAI session created:", session_id)
 
-                    # Forward all other events to client
-                    else:
-                        await websocket.send_text(json.dumps(event))
+                    # If OpenAI returns audio data, send to Twilio
+                    if event.get("type") == "response.audio.buffer":
+                        audio_bytes = base64.b64decode(event["audio"]["data"])
+                        twilio_event = {
+                            "event": "media",
+                            "media": {
+                                "payload": base64.b64encode(audio_bytes).decode("utf-8"),
+                                "track": "outbound_track"
+                            }
+                        }
+                        await websocket.send_text(json.dumps(twilio_event))
 
-            async def forward_client_to_openai():
-                nonlocal session_id
+            
+
+            async def handle_twilio_messages():
                 while True:
                     data = await websocket.receive_text()
-                    print("📩 From client:", data)
+                    twilio_event = json.loads(data)
 
-                    if not session_id:
-                        print("❌ Session not ready yet, cannot send message")
-                        continue
+                    # Only handle media events from Twilio
+                    if twilio_event.get("event") == "media":
+                        audio_b64 = twilio_event["media"]["payload"]
+                        audio_bytes = base64.b64decode(audio_b64)
 
-                    # Send user message to OpenAI Realtime
-                    event = {
-                        "type": "response.create",
-                        "response": {
-                            "conversation": "none",         # or "none"
-                            "output_modalities": ["text"],    # specify what you want back
-                            "input": [
-                                {
-                                    "type": "message",
-                                    "role": "user",
-                                    "content": [
-                                        {
-                                            "type": "input_text",
-                                            "text": data
-                                        }
-                                    ]
+                        # Forward to OpenAI Realtime as audio
+                        if session_id:
+                            event_to_openai = {
+                                "type": "input_audio_buffer.append",
+                                "audio": {
+                                    "content": base64.b64encode(audio_bytes).decode("utf-8")
                                 }
-                            ]
-                        }
-                    }
-                    await openai_ws.send(json.dumps(event))
+                            }
+                            await openai_ws.send(json.dumps(event_to_openai))
 
+                    # Handle end of segment / process
+                    elif twilio_event.get("event") == "stop":
+                        if session_id:
+                            await openai_ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
+                            await openai_ws.send(json.dumps({"type": "response.create"}))
             await asyncio.gather(
-                forward_openai_to_client(),
-                forward_client_to_openai()
+                handle_openai_responses(),
+                handle_twilio_messages()
             )
 
     except websockets.ConnectionClosedError as e:
