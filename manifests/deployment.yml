@@ -82,6 +82,7 @@ spec:
       nginx.ingress.kubernetes.io/proxy-connect-timeout: "120"
       nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
       nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+      nginx.org/websocket-services: by-the-app-api-demo-service
 
     name: by-the-app-api-demo-ingress
     namespace: #{env-namespace}#
