@@ -9,6 +9,7 @@ from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream, Gat
 from app.utils.decorators_twilio_auth import validate_twilio_request
 from app.utils.training_data_loader import get_cached_training_data
 import openai
+import audioop
 
 
 from app.utils.speech_services import synthesize_speech
@@ -74,16 +75,18 @@ async def media_stream(websocket: WebSocket):
     We’ll insert booking logic by interjecting system/context messages if needed.
     """
     await websocket.accept()
-    print("🎧 Client connected to /media-stream")
+    print("🎧 Twilio client connected")
 
     openai_ws_url = "wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview"
     headers = [("Authorization", f"Bearer {OPENAI_API_KEY}")]
+    session_id = None
+    pending_audio = []
 
     try:
         async with websockets.connect(openai_ws_url, additional_headers=headers) as openai_ws:
             print("🔗 Connected to OpenAI Realtime API")
 
-            # 1️⃣ Initialize session
+            # Initialize OpenAI session
             session_init = {
                 "type": "session.update",
                 "model": "gpt-4o-realtime-preview",
@@ -92,67 +95,81 @@ async def media_stream(websocket: WebSocket):
                 "metadata": {}
             }
             await openai_ws.send(json.dumps(session_init))
-            print("📤 Sent session.init to OpenAI")
 
-            session_id = None
-
-            async def handle_openai_responses():
+            # Handle OpenAI responses
+            async def handle_openai():
+                nonlocal session_id
                 while True:
-                    msg = await openai_ws.recv()
-                    event = json.loads(msg)
+                    try:
+                        msg = await openai_ws.recv()
+                        event = json.loads(msg)
+                        # Capture session ID
+                        if event.get("type") == "session.created":
+                            session_id = event["session"]["id"]
+                            print("✅ OpenAI session created:", session_id)
 
-                    # Capture session ID
-                    if event.get("type") == "session.created":
-                        nonlocal session_id
-                        session_id = event["session"]["id"]
-                        print("✅ OpenAI session created:", session_id)
+                            # Send any buffered audio
+                            for audio_bytes in pending_audio:
+                                pcm16_audio = audioop.ulaw2lin(audio_bytes, 2)
+                                await openai_ws.send(json.dumps({
+                                    "type": "input_audio_buffer.append",
+                                    "audio": {"content": base64.b64encode(pcm16_audio).decode("utf-8")}
+                                }))
+                            pending_audio.clear()
 
-                    # If OpenAI returns audio data, send to Twilio
-                    if event.get("type") == "response.audio.buffer":
-                        audio_bytes = base64.b64decode(event["audio"]["data"])
-                        twilio_event = {
-                            "event": "media",
-                            "media": {
-                                "payload": base64.b64encode(audio_bytes).decode("utf-8"),
-                                "track": "outbound_track"
-                            }
-                        }
-                        await websocket.send_text(json.dumps(twilio_event))
-
-            
-
-            async def handle_twilio_messages():
-                while True:
-                    data = await websocket.receive_text()
-                    twilio_event = json.loads(data)
-
-                    # Only handle media events from Twilio
-                    if twilio_event.get("event") == "media":
-                        audio_b64 = twilio_event["media"]["payload"]
-                        audio_bytes = base64.b64decode(audio_b64)
-
-                        # Forward to OpenAI Realtime as audio
-                        if session_id:
-                            event_to_openai = {
-                                "type": "input_audio_buffer.append",
-                                "audio": {
-                                    "content": base64.b64encode(audio_bytes).decode("utf-8")
+                       # Handle audio output from OpenAI
+                        elif event.get("type") == "response.audio.delta":
+                            pcm16_audio = base64.b64decode(event["delta"])
+                            # Convert PCM16 → μ-law for Twilio
+                            ulaw_audio = audioop.lin2ulaw(pcm16_audio, 2)
+                            twilio_event = {
+                                "event": "media",
+                                "media": {
+                                    "payload": base64.b64encode(ulaw_audio).decode("utf-8"),
+                                    "track": "outbound"
                                 }
                             }
-                            await openai_ws.send(json.dumps(event_to_openai))
+                            await websocket.send_text(json.dumps(twilio_event))
+                    except Exception as e:
+                        print("❌ OpenAI handler error:", e)
 
-                    # Handle end of segment / process
-                    elif twilio_event.get("event") == "stop":
-                        if session_id:
+            # Handle messages from Twilio
+            async def handle_twilio():
+                nonlocal session_id, pending_audio
+                while True:
+                    try:
+                        data = await websocket.receive_text()
+                        twilio_event = json.loads(data)
+
+                        if twilio_event.get("event") == "start":
+                            print("🎬 Twilio stream started:", twilio_event["start"]["streamSid"])
+                            continue
+
+                        if twilio_event.get("event") == "media":
+                            ulaw_audio = base64.b64decode(twilio_event["media"]["payload"])
+                            if session_id:
+                                pcm16_audio = audioop.ulaw2lin(ulaw_audio, 2)
+                                await openai_ws.send(json.dumps({
+                                    "type": "input_audio_buffer.append",
+                                    "audio": {"content": base64.b64encode(pcm16_audio).decode("utf-8")}
+                                }))
+                            else:
+                                pending_audio.append(ulaw_audio)
+
+                        if twilio_event.get("event") == "stop" and session_id:
+                            print("🛑 Twilio stream stopped")
                             await openai_ws.send(json.dumps({"type": "input_audio_buffer.commit"}))
                             await openai_ws.send(json.dumps({"type": "response.create"}))
-            await asyncio.gather(
-                handle_openai_responses(),
-                handle_twilio_messages()
-            )
+                            break
+
+                    except Exception as e:
+                        print("❌ Twilio handler error:", e)
+
+            # Run both loops concurrently
+            await asyncio.gather(handle_openai(), handle_twilio())
 
     except websockets.ConnectionClosedError as e:
         print("❌ OpenAI WebSocket closed:", e)
     finally:
         await websocket.close()
-        print("🛑 Client disconnected")
+        print("🛑 Twilio client disconnected")
