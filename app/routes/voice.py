@@ -324,7 +324,11 @@ async def inject_availability_context(openai_ws, limit=5):
                 "content": [
                     {
                         "type": "input_text",
-                        "text": f"Here are the available appointments:\n{context_text}"
+                         "text": (
+                            f"Here are the available appointments:\n{context_text}\n\n"
+                            "When booking an appointment, always ask for the patient's full name "
+                            "if it has not been provided. Use this name when saving the appointment."
+                        )
                     }
                 ]
             }
