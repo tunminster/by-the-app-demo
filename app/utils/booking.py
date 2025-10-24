@@ -1,6 +1,12 @@
 # booking.py
 from typing import Optional, List, Dict
 from app.utils.db import fetch_available_slots, mark_slot_booked, insert_appointment
+import openai
+import os
+import json
+
+DENTISTS = ["Dr. Sarah Nguyen", "Dr. James Lee", "Dr. Emily Chen", "Dr. Michael Brown"]  # ideally fetched dynamically
+openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 def build_context_text(slots: List[Dict]) -> str:
     # Convert slot records into human-readable lines
@@ -52,3 +58,49 @@ def book_if_possible(intent: Dict) -> bool:
     mark_slot_booked(dentist_id, intent["date"], intent["time"])
     insert_appointment(dentist_id, intent["patient_name"], intent["date"], intent["time"])
     return True
+
+async def parse_booking_intent_ai(reply_text: str) -> Optional[Dict]:
+    """
+    Use LLM to parse patient reply into structured booking info.
+    Fallback to first available slot if date/time missing.
+    """
+    available_slots = fetch_available_slots(limit=5)
+    prompt = f"""
+        You are a dental receptionist assistant.
+        Extract structured JSON information from the patient's message.
+
+        Patient message:
+        \"\"\"{reply_text}\"\"\"
+
+        Return JSON with keys:
+        - dentist: one of {DENTISTS} or null
+        - date: YYYY-MM-DD or null
+        - time: HH:MM or null
+        - patient_name: null if not mentioned
+
+        Only respond with valid JSON.
+        """
+    try:
+        response = await openai.ChatCompletion.acreate(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0
+        )
+        content = response.choices[0].message.content.strip()
+        data = json.loads(content)
+    except Exception as e:
+        print("LLM parsing error:", e)
+        return None
+
+    # Fallback: assign first available slot if missing
+    if available_slots and data.get("dentist"):
+        slots = available_slots.get(data["dentist"], [])
+        if slots:
+            if not data.get("date") or not data.get("time"):
+                first_slot = slots[0]
+                data["date"] = data.get("date") or first_slot["date"]
+                data["time"] = data.get("time") or first_slot["start_time"]
+
+    if data.get("dentist") and data.get("patient_name"):
+        return data
+    return None
