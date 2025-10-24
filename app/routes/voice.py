@@ -15,7 +15,7 @@ import audioop
 from app.utils.speech_services import synthesize_speech
 from pathlib import Path
 from fastapi.routing import APIRouter
-from app.utils.db import fetch_available_slots
+from app.utils.db import fetch_available_slots,fetch_dentists
 from app.utils.booking import build_context_text, parse_booking_intent, book_if_possible
 
 # Initialize FastAPI app
@@ -145,6 +145,9 @@ async def media_stream(websocket: WebSocket):
                         if response['type'] in LOG_EVENT_TYPES:
                             print(f"Received event: {response['type']}", response)
 
+                        # 🔹 Handle RAG text responses
+                        await process_ai_text_response(openai_ws, response)
+
                         if response.get('type') == 'response.output_audio.delta' and 'delta' in response:
                             audio_payload = base64.b64encode(base64.b64decode(response['delta'])).decode('utf-8')
                             audio_delta = {
@@ -247,6 +250,9 @@ async def initialize_session(openai_ws):
     print('Sending session update:', json.dumps(session_update))
     await openai_ws.send(json.dumps(session_update))
 
+    # Inject dynamic RAG context (availability from DB)
+    await inject_availability_context(openai_ws)
+
     # Uncomment the next line to have the AI speak first
     await send_initial_conversation_item(openai_ws)
 
@@ -267,3 +273,64 @@ async def send_initial_conversation_item(openai_ws):
     }
     await openai_ws.send(json.dumps(initial_conversation_item))
     await openai_ws.send(json.dumps({"type": "response.create"}))
+
+async def process_ai_text_response(openai_ws, response):
+    """
+    Handle AI text responses: detect booking intents and update the DB if necessary.
+    """
+    try:
+        if response.get("type") == "response.output_text.delta" and "delta" in response:
+            text_chunk = response["delta"]
+            print("🧾 AI said:", text_chunk)
+
+            intent = parse_booking_intent(text_chunk)
+            if intent:
+                success = book_if_possible(intent)
+                if success:
+                    print(f"✅ Booking saved for {intent['patient_name']} with {intent['dentist']} on {intent['date']} at {intent['time']}")
+                    # Optionally refresh RAG context after booking
+                    await inject_availability_context(openai_ws)
+                else:
+                    print("❌ Booking failed — dentist not found or slot unavailable.")
+    except Exception as e:
+        print(f"❌ Error processing AI response: {e}")
+
+async def inject_availability_context(openai_ws, limit=5):
+    """
+    Fetch available dentist slots from DB and inject as RAG context into OpenAI session.
+    """
+    try:
+        # 1️⃣ Fetch slots
+        slots = fetch_available_slots(limit=limit)
+        if slots:
+            availability_text = build_context_text(slots)
+        else:
+            availability_text = "Currently no available appointments."
+
+        # 2️⃣ Fetch dentists with specialties
+        dentists = fetch_dentists()
+        if dentists:
+            dentist_info = "\n".join([f"{d['name']} ({d['specialty']})" for d in dentists])
+        else:
+            dentist_info = "No dentists found."
+
+        context_text = f"Available appointments:\n{availability_text}\n\nDentists in this office:\n{dentist_info}"
+
+        context_message = {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"Here are the available appointments:\n{context_text}"
+                    }
+                ]
+            }
+        }
+
+        await openai_ws.send(json.dumps(context_message))
+        print("✅ Injected RAG context (availability) into conversation.")
+    except Exception as e:
+        print(f"❌ Failed to inject RAG context: {e}")

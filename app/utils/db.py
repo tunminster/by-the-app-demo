@@ -41,3 +41,12 @@ def insert_appointment(dentist_id, patient_name, date, time):
             INSERT INTO appointments (dentist_id, patient_name, appointment_date, appointment_time)
             VALUES (%s, %s, %s, %s)
         """, (dentist_id, patient_name, date, time))
+
+def fetch_dentists():
+    """
+    Returns all dentists with their names and IDs.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT id, name, specialty FROM dentists ORDER BY name")
+        return cur.fetchall()
+
