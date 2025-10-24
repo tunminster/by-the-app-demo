@@ -16,7 +16,7 @@ from app.utils.speech_services import synthesize_speech
 from pathlib import Path
 from fastapi.routing import APIRouter
 from app.utils.db import fetch_available_slots,fetch_dentists
-from app.utils.booking import build_context_text, parse_booking_intent, book_if_possible
+from app.utils.booking import build_context_text, parse_booking_intent, parse_booking_intent_ai, book_if_possible
 
 # Initialize FastAPI app
 voice_router = APIRouter()
@@ -283,7 +283,7 @@ async def process_ai_text_response(openai_ws, response):
             text_chunk = response["delta"]
             print("🧾 AI said:", text_chunk)
 
-            intent = parse_booking_intent(text_chunk)
+            intent = parse_booking_intent_ai(text_chunk)
             if intent:
                 success = book_if_possible(intent)
                 if success:
