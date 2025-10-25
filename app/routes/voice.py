@@ -301,7 +301,7 @@ async def process_ai_text_response(openai_ws, response):
             text_chunk = "".join(text_chunk)
             print("text_chunk ", text_chunk)
 
-            match = re.search(r"BOOKING_CONFIRMATION:\s*(\{.*?\})}", text_chunk, re.DOTALL)
+            match = re.search(r"\n\nBOOKING_CONFIRMATION:\s*(\{.*?\})", text_chunk, re.DOTALL)
             if match:
                 print("\n\nBOOKING_CONFIRMATION found in text_chunk", match.group(0))
                 try:
