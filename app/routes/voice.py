@@ -23,7 +23,12 @@ voice_router = APIRouter()
 # Set OpenAI API key
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
-SYSTEM_MESSAGE = "You are a helpful dental receptionist. Use the availability to schedule appointments for patients. Ask clarifying questions if needed."
+SYSTEM_MESSAGE = """
+    You are a helpful dental receptionist. Use the availability to schedule appointments for patients. Ask clarifying questions if needed. 
+    When the patient agrees to book, ALWAYS send a hidden message in the format: 
+    BOOKING_INTENT: {"dentist": "Dr. Smith", "date": "2025-10-25", "time": "10:00", "patient_name": "Alice Jones"} 
+    Do not say this out loud. Just include it as a text output message.
+    """
 VOICE = "alloy"
 PORT = int(os.getenv("PORT", 5050))
 TEMPERATURE = float(os.getenv('TEMPERATURE', 0.8))
@@ -283,9 +288,18 @@ async def process_ai_text_response(openai_ws, response):
             text_chunk = response["delta"]
             print("🧾 AI said:", text_chunk)
 
-            intent = parse_booking_intent_ai(text_chunk)
-            if intent:
-                print(" intent ", intent)
+            #intent = parse_booking_intent_ai(text_chunk)
+            if "BOOKING_INTENT:" in text_chunk:
+                
+                try:
+                    json_part = text_chunk.split("BOOKING_INTENT:")[1].strip()
+                    intent = json.loads(json_part)
+                    print(" intent ", intent)
+                except Exception as e:
+                    print(f"⚠️ Failed to parse BOOKING_INTENT JSON: {e}")
+                    return
+                
+                # Attempt booking
                 success = book_if_possible(intent)
                 if success:
                     print(f"✅ Booking saved for {intent['patient_name']} with {intent['dentist']} on {intent['date']} at {intent['time']}")
