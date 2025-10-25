@@ -16,7 +16,7 @@ import re
 from app.utils.speech_services import synthesize_speech
 from pathlib import Path
 from fastapi.routing import APIRouter
-from app.utils.db import fetch_available_slots,fetch_dentists
+from app.utils.db import fetch_available_slots, fetch_dentists, find_patient_by_name, find_patient_by_phone, find_patient_by_email, create_new_patient
 from app.utils.booking import build_context_text, parse_booking_intent, parse_booking_intent_ai, book_if_possible
 
 # Initialize FastAPI app
@@ -27,7 +27,7 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 SYSTEM_MESSAGE = """
     You are a helpful dental receptionist. Use the availability to schedule appointments for patients. Ask clarifying questions if needed. 
     When the patient agrees to book, ALWAYS send a hidden message in the format: 
-    BOOKING_CONFIRMATION: {"dentist": "Dr. Smith", "date": "2025-10-25", "time": "10:00", "patient_name": "Alice Jones"} 
+    BOOKING_CONFIRMATION: {"dentist": "Dr. Sarah Nguyen", "date": "2025-10-25", "time": "10:00", "patient_name": "Alice Jones"} 
     Do not say this out loud. Just include it as a text output message.
     """
 VOICE = "alloy"
@@ -41,25 +41,6 @@ LOG_EVENT_TYPES = [
 ]
 SHOW_TIMING_MATH = False
 
-# Helper function to get AI response
-async def get_ai_response(user_input):
-    try:
-        training_data = await get_cached_training_data()
-
-        # Prepare the conversation history as a prompt
-        conversation_history = "\n".join([f"{msg['role']}: {msg['content']}" for msg in training_data])
-        conversation_history += f"\nuser: {user_input}\nsystem:"
-
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages = [{"role": "system", "content": "You are an AI assistant for an insurance company."},
-                        {"role": "user", "content": user_input}]
-        )
-
-        return response["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        print(e)
-        return e.message
 
 # Twilio voice route (main entry)
 #@voice_router.post("/voice")
@@ -258,6 +239,9 @@ async def initialize_session(openai_ws):
 
     # Inject dynamic RAG context (availability from DB)
     await inject_availability_context(openai_ws)
+    
+    # Inject patient lookup context (will be called again with actual caller info when available)
+    await inject_patient_context(openai_ws)
 
     # Uncomment the next line to have the AI speak first
     await send_initial_conversation_item(openai_ws)
@@ -301,6 +285,27 @@ async def process_ai_text_response(openai_ws, response):
             text_chunk = "".join(text_chunk)
             print("text_chunk ", text_chunk)
 
+            # Check for patient creation request
+            patient_match = re.search(r"\n\nPATIENT_CREATION:\s*(\{.*?\})", text_chunk, re.DOTALL)
+            if patient_match:
+                print("\n\nPATIENT_CREATION found in text_chunk", patient_match.group(0))
+                try:
+                    json_part = patient_match.group(1)
+                    patient_data = json.loads(json_part)
+                    print(" patient_data ", patient_data)
+                    
+                    # Create new patient
+                    patient_id = await create_patient_from_ai_response(openai_ws, patient_data)
+                    if patient_id:
+                        print(f"✅ New patient created with ID: {patient_id}")
+                    else:
+                        print("❌ Failed to create patient")
+                        
+                except Exception as e:
+                    print(f"⚠️ Failed to parse PATIENT_CREATION JSON: {e}")
+                    return
+            
+            # Check for booking confirmation
             match = re.search(r"\n\nBOOKING_CONFIRMATION:\s*(\{.*?\})", text_chunk, re.DOTALL)
             if match:
                 print("\n\nBOOKING_CONFIRMATION found in text_chunk", match.group(0))
@@ -366,3 +371,127 @@ async def inject_availability_context(openai_ws, limit=5):
         print("✅ Injected RAG context (availability) into conversation.")
     except Exception as e:
         print(f"❌ Failed to inject RAG context: {e}")
+
+async def inject_patient_context(openai_ws, caller_name=None, caller_phone=None):
+    """
+    Inject patient lookup context to help AI determine if caller is new or existing patient.
+    """
+    try:
+        patient_context = ""
+        existing_patients = []
+        
+        # If we have a name, search for existing patients
+        if caller_name:
+            patients_by_name = find_patient_by_name(caller_name)
+            existing_patients.extend(patients_by_name)
+        
+        # If we have a phone, search for existing patients
+        if caller_phone:
+            patient_by_phone = find_patient_by_phone(caller_phone)
+            if patient_by_phone and patient_by_phone not in existing_patients:
+                existing_patients.append(patient_by_phone)
+        
+        if existing_patients:
+            patient_info = "\n".join([
+                f"Patient: {p['name']}, Phone: {p['phone']}, Email: {p['email']}, DOB: {p['date_of_birth']}, Status: {p['status']}"
+                for p in existing_patients
+            ])
+            patient_context = f"EXISTING PATIENTS FOUND:\n{patient_info}\n\n"
+        else:
+            patient_context = "NO EXISTING PATIENTS FOUND - This appears to be a new patient.\n\n"
+        
+        context_message = {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            f"{patient_context}"
+                            "PATIENT VERIFICATION INSTRUCTIONS:\n"
+                            "1. If existing patients are found above, confirm their details (name, phone, email, date of birth)\n"
+                            "2. If no existing patients found, collect NEW PATIENT information:\n"
+                            "   - Full name\n"
+                            "   - Phone number\n"
+                            "   - Email address\n"
+                            "   - Date of birth (MM/DD/YYYY format)\n"
+                            "3. For new patients, say: 'I'll need to create a new patient record for you. Let me collect your information.'\n"
+                            "4. For existing patients, say: 'I found your record. Let me confirm your details.'\n"
+                            "5. Always verify the information before proceeding with appointment booking.\n"
+                            "6. If creating a new patient, use the collected information to create the patient record before booking."
+                        )
+                    }
+                ]
+            }
+        }
+        
+        await openai_ws.send(json.dumps(context_message))
+        print("✅ Injected RAG context (patient lookup) into conversation.")
+    except Exception as e:
+        print(f"❌ Error injecting patient context: {e}")
+
+async def create_patient_from_ai_response(openai_ws, patient_data):
+    """
+    Create a new patient record from AI-collected data.
+    """
+    try:
+        # Extract patient information from AI response
+        name = patient_data.get('name', '').strip()
+        email = patient_data.get('email', '').strip()
+        phone = patient_data.get('phone', '').strip()
+        date_of_birth = patient_data.get('date_of_birth', '').strip()
+        
+        if not all([name, email, phone, date_of_birth]):
+            raise ValueError("Missing required patient information")
+        
+        # Create the patient record
+        patient_id = create_new_patient(name, email, phone, date_of_birth)
+        
+        if patient_id:
+            # Send confirmation to AI
+            confirmation_message = {
+                "type": "conversation.item.create",
+                "item": {
+                    "type": "message",
+                    "role": "system",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                f"✅ NEW PATIENT CREATED SUCCESSFULLY!\n"
+                                f"Patient ID: {patient_id}\n"
+                                f"Name: {name}\n"
+                                f"Email: {email}\n"
+                                f"Phone: {phone}\n"
+                                f"Date of Birth: {date_of_birth}\n\n"
+                                "You can now proceed with booking the appointment for this patient."
+                            )
+                        }
+                    ]
+                }
+            }
+            await openai_ws.send(json.dumps(confirmation_message))
+            print(f"✅ Created new patient: {name} (ID: {patient_id})")
+            return patient_id
+        else:
+            raise Exception("Failed to create patient record")
+            
+    except Exception as e:
+        error_message = {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": f"❌ ERROR: Failed to create patient record: {str(e)}\nPlease ask the caller to provide the information again."
+                    }
+                ]
+            }
+        }
+        await openai_ws.send(json.dumps(error_message))
+        print(f"❌ Error creating patient: {e}")
+        return None
