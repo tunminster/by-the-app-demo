@@ -3,7 +3,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime, timezone, date, time
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 import os
 from app.utils.db import conn
 from psycopg2.extras import RealDictCursor
@@ -74,7 +75,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception
-    except JWTError:
+    except PyJWTError:
         raise credentials_exception
     
     # Get user from database
