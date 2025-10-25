@@ -238,7 +238,7 @@ async def initialize_session(openai_ws):
         "session": {
             "type": "realtime",
             "model": "gpt-realtime",
-            "output_modalities": ["audio", "text"],
+            "output_modalities": ["audio"],
             "audio": {
                 "input": {
                     "format": {"type": "audio/pcmu"},
