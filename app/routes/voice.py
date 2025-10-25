@@ -297,10 +297,10 @@ async def process_ai_text_response(openai_ws, response):
             print("🧾 AI said:", text_chunk)
 
             #intent = parse_booking_intent_ai(text_chunk)
-            if "BOOKING_CONFIRMATION:" in text_chunk:
+            if "\n\nBOOKING_CONFIRMATION:" in text_chunk:
                 
                 try:
-                    json_part = text_chunk.split("BOOKING_CONFIRMATION:")[1].strip()
+                    json_part = text_chunk.split("\n\nBOOKING_CONFIRMATION:")[1].strip()
                     intent = json.loads(json_part)
                     print(" intent ", intent)
                 except Exception as e:
