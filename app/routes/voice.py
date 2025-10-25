@@ -420,7 +420,9 @@ async def inject_patient_context(openai_ws, caller_name=None, caller_phone=None)
                             "3. For new patients, say: 'I'll need to create a new patient record for you. Let me collect your information.'\n"
                             "4. For existing patients, say: 'I found your record. Let me confirm your details.'\n"
                             "5. Always verify the information before proceeding with appointment booking.\n"
-                            "6. If creating a new patient, use the collected information to create the patient record before booking."
+                            "6. If creating a new patient, use the collected information to create the patient record before booking.\n"
+                            "7. When you have collected all patient information, output exactly this format (do not speak this out loud):\n"
+                            "PATIENT_CREATION: {\"name\": \"John Smith\", \"email\": \"john@email.com\", \"phone\": \"(555) 123-4567\", \"date_of_birth\": \"01/15/1985\"}"
                         )
                     }
                 ]
