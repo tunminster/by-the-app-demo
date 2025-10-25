@@ -49,13 +49,9 @@ ctransformers>=0.1.0
 asgiref  
 
 python-multipart
-PyJWT[crypto]  # Ensure JWT includes cryptographic support
-python-dotenv  # (Optional) Environment variable management
-
-python-dotenv
+PyJWT[crypto]>=2.8.0  # JWT token handling
+python-dotenv  # Environment variable management
 
 psycopg2-binary
 
 websockets
-
-jose
