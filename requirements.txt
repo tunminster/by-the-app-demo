@@ -58,3 +58,4 @@ psycopg2-binary
 
 websockets
 
+jose
