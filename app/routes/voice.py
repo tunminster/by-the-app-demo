@@ -26,7 +26,7 @@ OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 SYSTEM_MESSAGE = """
     You are a helpful dental receptionist. Use the availability to schedule appointments for patients. Ask clarifying questions if needed. 
     When the patient agrees to book, ALWAYS send a hidden message in the format: 
-    BOOKING_INTENT: {"dentist": "Dr. Smith", "date": "2025-10-25", "time": "10:00", "patient_name": "Alice Jones"} 
+    BOOKING_CONFIRMATION: {"dentist": "Dr. Smith", "date": "2025-10-25", "time": "10:00", "patient_name": "Alice Jones"} 
     Do not say this out loud. Just include it as a text output message.
     """
 VOICE = "alloy"
@@ -238,7 +238,7 @@ async def initialize_session(openai_ws):
         "session": {
             "type": "realtime",
             "model": "gpt-realtime",
-            "output_modalities": ["audio"],
+            "output_modalities": ["audio", "text"],
             "audio": {
                 "input": {
                     "format": {"type": "audio/pcmu"},
@@ -289,10 +289,10 @@ async def process_ai_text_response(openai_ws, response):
             print("🧾 AI said:", text_chunk)
 
             #intent = parse_booking_intent_ai(text_chunk)
-            if "BOOKING_INTENT:" in text_chunk:
+            if "BOOKING_CONFIRMATION:" in text_chunk:
                 
                 try:
-                    json_part = text_chunk.split("BOOKING_INTENT:")[1].strip()
+                    json_part = text_chunk.split("BOOKING_CONFIRMATION:")[1].strip()
                     intent = json.loads(json_part)
                     print(" intent ", intent)
                 except Exception as e:
