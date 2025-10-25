@@ -1,19 +1,37 @@
 # booking.py
 from typing import Optional, List, Dict
-from app.utils.db import fetch_available_slots, mark_slot_booked, insert_appointment
+from app.utils.db import (
+    fetch_available_slots, 
+    mark_slot_booked, 
+    insert_appointment,
+    fetch_dentist_by_name,
+    update_time_slot_availability
+)
 import openai
 import os
 import json
 
-DENTISTS = ["Dr. Sarah Nguyen", "Dr. James Lee", "Dr. Emily Chen", "Dr. Michael Brown"]  # ideally fetched dynamically
+def get_dentist_names():
+    """
+    Get list of dentist names from database.
+    """
+    from app.utils.db import fetch_dentists
+    dentists = fetch_dentists()
+    return [dentist["name"] for dentist in dentists]
+
+# Get dentist names dynamically
+DENTISTS = get_dentist_names()
 openai.api_key = os.environ.get('OPENAI_API_KEY')
 
 def build_context_text(slots: List[Dict]) -> str:
     # Convert slot records into human-readable lines
     lines = []
     for s in slots:
+        time_slot = s.get('time_slot', {})
+        start_time = time_slot.get('start', 'N/A')
+        end_time = time_slot.get('end', 'N/A')
         lines.append(
-            f"{s['dentist_name']} on {s['date']} at {s['start_time']}–{s['end_time']}"
+            f"{s['dentist_name']} on {s['date']} at {start_time}–{end_time}"
         )
     return "\n".join(lines)
 
@@ -44,19 +62,29 @@ def book_if_possible(intent: Dict) -> bool:
     """
     Try to book; return True if successful, False otherwise.
     """
-    # First find dentist_id matching name (you’d likely want a mapping)
-    # For simplicity, assume you do a lookup in DB:
-    # (You could extend db.py to get dentist_id by name)
-    from db import conn
-    with conn.cursor() as cur:
-        cur.execute("SELECT id FROM dentists WHERE name = %s", (intent["dentist"],))
-        res = cur.fetchone()
-        if not res:
-            return False
-        dentist_id = res[0]
-    # Mark slot booked
-    mark_slot_booked(dentist_id, intent["date"], intent["time"])
+    # Find dentist by name
+    dentist = fetch_dentist_by_name(intent["dentist"])
+    if not dentist:
+        print(f"Dentist {intent['dentist']} not found")
+        return False
+    
+    dentist_id = dentist["id"]
+    
+    # Update time slot availability to false (booked)
+    success = update_time_slot_availability(
+        dentist_id, 
+        intent["date"], 
+        intent["time"], 
+        available=False
+    )
+    
+    if not success:
+        print(f"Failed to book slot for {intent['dentist']} on {intent['date']} at {intent['time']}")
+        return False
+    
+    # Insert appointment
     insert_appointment(dentist_id, intent["patient_name"], intent["date"], intent["time"])
+    print(f"Successfully booked appointment for {intent['patient_name']} with {intent['dentist']}")
     return True
 
 async def parse_booking_intent_ai(reply_text: str) -> Optional[Dict]:
@@ -67,6 +95,9 @@ async def parse_booking_intent_ai(reply_text: str) -> Optional[Dict]:
     #available_slots = fetch_available_slots(limit=5)
     available_slots = []
     
+    # Get current dentist names
+    current_dentists = get_dentist_names()
+    
     prompt = f"""
         You are a dental receptionist assistant.
         Extract structured JSON information from the patient's message.
@@ -75,7 +106,7 @@ async def parse_booking_intent_ai(reply_text: str) -> Optional[Dict]:
         \"\"\"{reply_text}\"\"\"
 
         Return JSON with keys:
-        - dentist: one of {DENTISTS} or null
+        - dentist: one of {current_dentists} or null
         - date: YYYY-MM-DD or null
         - time: HH:MM or null
         - patient_name: null if not mentioned
@@ -101,7 +132,8 @@ async def parse_booking_intent_ai(reply_text: str) -> Optional[Dict]:
             if not data.get("date") or not data.get("time"):
                 first_slot = slots[0]
                 data["date"] = data.get("date") or first_slot["date"]
-                data["time"] = data.get("time") or first_slot["start_time"]
+                time_slot = first_slot.get('time_slot', {})
+                data["time"] = data.get("time") or time_slot.get("start", "09:00")
 
     if data.get("dentist") and data.get("patient_name"):
         print(" save: ", data)
