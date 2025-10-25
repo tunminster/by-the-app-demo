@@ -285,6 +285,7 @@ async def process_ai_text_response(openai_ws, response):
 
             intent = parse_booking_intent_ai(text_chunk)
             if intent:
+                print(" intent ", intent)
                 success = book_if_possible(intent)
                 if success:
                     print(f"✅ Booking saved for {intent['patient_name']} with {intent['dentist']} on {intent['date']} at {intent['time']}")

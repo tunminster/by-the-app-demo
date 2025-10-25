@@ -64,7 +64,9 @@ async def parse_booking_intent_ai(reply_text: str) -> Optional[Dict]:
     Use LLM to parse patient reply into structured booking info.
     Fallback to first available slot if date/time missing.
     """
-    available_slots = fetch_available_slots(limit=5)
+    #available_slots = fetch_available_slots(limit=5)
+    available_slots = []
+    
     prompt = f"""
         You are a dental receptionist assistant.
         Extract structured JSON information from the patient's message.
@@ -102,5 +104,6 @@ async def parse_booking_intent_ai(reply_text: str) -> Optional[Dict]:
                 data["time"] = data.get("time") or first_slot["start_time"]
 
     if data.get("dentist") and data.get("patient_name"):
+        print(" save: ", data)
         return data
     return None
