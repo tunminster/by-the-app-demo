@@ -284,8 +284,16 @@ async def process_ai_text_response(openai_ws, response):
     Handle AI text responses: detect booking intents and update the DB if necessary.
     """
     try:
-        if response.get("type") == "response.output_text.delta" and "delta" in response:
-            text_chunk = response["delta"]
+        if response.get("type") == "response.done":
+
+            output = response.get("response", {}).get("output", [])
+            text_chunk = []
+            for item in output:
+                if item.get("type") == "message":
+                    for c in item.get("content", []):
+                        if c.get("type") == "output_audio" and "transcript" in c:
+                            text_chunk.append(c["transcript"])
+
             print("🧾 AI said:", text_chunk)
 
             #intent = parse_booking_intent_ai(text_chunk)
