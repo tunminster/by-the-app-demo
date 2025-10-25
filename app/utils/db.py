@@ -104,3 +104,53 @@ def update_time_slot_availability(dentist_id, date, time_slot_start, available=F
         """, (time_slot_start, str(available).lower(), dentist_id, date))
         return cur.rowcount > 0
 
+def find_patient_by_name(name):
+    """
+    Find patient by name (case-insensitive partial match).
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT id, name, email, phone, date_of_birth, status 
+            FROM patients 
+            WHERE LOWER(name) LIKE LOWER(%s)
+            ORDER BY name
+        """, (f"%{name}%",))
+        return cur.fetchall()
+
+def find_patient_by_phone(phone):
+    """
+    Find patient by phone number.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT id, name, email, phone, date_of_birth, status 
+            FROM patients 
+            WHERE phone = %s
+        """, (phone,))
+        return cur.fetchone()
+
+def find_patient_by_email(email):
+    """
+    Find patient by email.
+    """
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("""
+            SELECT id, name, email, phone, date_of_birth, status 
+            FROM patients 
+            WHERE LOWER(email) = LOWER(%s)
+        """, (email,))
+        return cur.fetchone()
+
+def create_new_patient(name, email, phone, date_of_birth):
+    """
+    Create a new patient record.
+    """
+    with conn.cursor() as cur:
+        cur.execute("""
+            INSERT INTO patients (name, email, phone, date_of_birth, status, created_at)
+            VALUES (%s, %s, %s, %s, 'active', NOW())
+            RETURNING id
+        """, (name, email, phone, date_of_birth))
+        result = cur.fetchone()
+        return result[0] if result else None
+
