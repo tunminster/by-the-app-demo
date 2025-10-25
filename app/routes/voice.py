@@ -299,10 +299,11 @@ async def process_ai_text_response(openai_ws, response):
 
             #intent = parse_booking_intent_ai(text_chunk)
             text_chunk = "".join(text_chunk)
+            print("text_chunk ", text_chunk)
 
             match = re.search(r"BOOKING_CONFIRMATION:\s*(\{.*?\})}", text_chunk, re.DOTALL)
             if match:
-                print("BOOKING_CONFIRMATION found in text_chunk", match.group(0))
+                print("\n\nBOOKING_CONFIRMATION found in text_chunk", match.group(0))
                 try:
                     json_part = match.group(1)
                     intent = json.loads(json_part)
