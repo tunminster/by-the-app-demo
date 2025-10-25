@@ -17,13 +17,17 @@ conn.autocommit = True
 def fetch_available_slots(limit=5):
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            SELECT d.id AS dentist_id, d.name AS dentist_name,
-                   a.date, 
-                   jsonb_array_elements(a.time_slots) as time_slot
-            FROM availability a
-            JOIN dentists d ON a.dentist_id = d.id
-            WHERE (jsonb_array_elements(a.time_slots)->>'available')::boolean = true
-            ORDER BY a.date, (jsonb_array_elements(a.time_slots)->>'start')
+            WITH time_slots_expanded AS (
+                SELECT d.id AS dentist_id, d.name AS dentist_name,
+                       a.date, 
+                       jsonb_array_elements(a.time_slots) as time_slot
+                FROM availability a
+                JOIN dentists d ON a.dentist_id = d.id
+            )
+            SELECT dentist_id, dentist_name, date, time_slot
+            FROM time_slots_expanded
+            WHERE (time_slot->>'available')::boolean = true
+            ORDER BY date, (time_slot->>'start')
             LIMIT %s
         """, (limit,))
         return cur.fetchall()
@@ -32,18 +36,18 @@ def mark_slot_booked(dentist_id, date, time):
     with conn.cursor() as cur:
         cur.execute("""
             UPDATE availability
-            SET time_slots = jsonb_set(
-                time_slots,
-                array[jsonb_array_length(time_slots)::text],
-                jsonb_set(
-                    jsonb_array_elements(time_slots),
-                    '{available}',
-                    'false'::jsonb
+            SET time_slots = (
+                SELECT jsonb_agg(
+                    CASE 
+                        WHEN slot->>'start' = %s 
+                        THEN jsonb_set(slot, '{available}', 'false'::jsonb)
+                        ELSE slot 
+                    END
                 )
+                FROM jsonb_array_elements(time_slots) as slot
             )
-            WHERE dentist_id=%s AND date=%s 
-            AND jsonb_array_elements(time_slots)->>'start' = %s
-        """, (dentist_id, date, time))
+            WHERE dentist_id = %s AND date = %s
+        """, (time, dentist_id, date))
 
 def insert_appointment(dentist_id, patient_name, date, time):
     with conn.cursor() as cur:
