@@ -1,0 +1,9 @@
+include README.md
+include requirements.txt
+include *.sql
+include *.yml
+include Dockerfile
+recursive-include app *.py
+recursive-include app *.md
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]

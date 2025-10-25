@@ -1,0 +1,2 @@
+[console_scripts]
+dental-api = run:main
