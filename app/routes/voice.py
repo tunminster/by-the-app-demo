@@ -10,6 +10,7 @@ from app.utils.decorators_twilio_auth import validate_twilio_request
 from app.utils.training_data_loader import get_cached_training_data
 import openai
 import audioop
+import re
 
 
 from app.utils.speech_services import synthesize_speech
@@ -297,10 +298,13 @@ async def process_ai_text_response(openai_ws, response):
             print("🧾 AI said:", text_chunk)
 
             #intent = parse_booking_intent_ai(text_chunk)
-            if "\n\nBOOKING_CONFIRMATION:" in text_chunk:
-                
+            text_chunk = "".join(text_chunk)
+
+            match = re.search(r"BOOKING_CONFIRMATION:\s*(\{.*?\})}", text_chunk, re.DOTALL)
+            if match:
+                print("BOOKING_CONFIRMATION found in text_chunk", match.group(0))
                 try:
-                    json_part = text_chunk.split("\n\nBOOKING_CONFIRMATION:")[1].strip()
+                    json_part = match.group(1)
                     intent = json.loads(json_part)
                     print(" intent ", intent)
                 except Exception as e:
