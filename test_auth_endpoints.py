@@ -7,20 +7,31 @@ Verify that the new /auth endpoints are accessible
 import requests
 import json
 from datetime import datetime
+from os import getenv
+from dotenv import load_dotenv
 
-# API Base URL
-API_BASE = "https://api-demo.bytheapp.com"
+# Load environment variables from .env file
+load_dotenv()
+
+# API Base URL - Handle missing protocol and default value
+api_url = getenv("API_BASE_URL")
+if api_url and not api_url.startswith(("http://", "https://")):
+    api_url = f"http://{api_url}"
+API_BASE = api_url
 
 def test_auth_endpoints():
     """Test the authentication endpoints"""
     print("🧪 Testing Authentication Endpoints")
     print("=" * 45)
+    print(f"🌐 API Base URL: {API_BASE}")
+    print("=" * 45)
     
     # Test 1: Login endpoint
     print("\n1️⃣ Testing /auth/login endpoint...")
+    # Note: Password must be <= 72 bytes due to bcrypt limitation
     login_data = {
         "username": "admin",
-        "password": "admin123"
+        "password": "admin123"  # Make sure this is <= 72 bytes
     }
     
     try:
@@ -72,7 +83,7 @@ def test_auth_endpoints():
     register_data = {
         "username": f"test_user_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
         "email": f"test_{datetime.now().strftime('%Y%m%d_%H%M%S')}@test.com",
-        "password": "testpassword123",
+        "password": "TestPass123!",  # Shorter password (under 72 bytes)
         "name": "Test User",
         "role": "user"
     }

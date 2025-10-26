@@ -80,7 +80,10 @@ This document describes the new authentication endpoints available at `/auth` pr
 - `400 Bad Request`: Email already exists
 - `500 Internal Server Error`: Server error
 
-**Note:** New users are created with `is_active: false` and require admin approval to login.
+**Note:** 
+- New users are created with `is_active: false` and require admin approval to login
+- Password must be at least 8 characters long
+- Password cannot exceed 72 bytes due to bcrypt limitation
 
 ---
 
@@ -224,6 +227,37 @@ The `users` table should have the following columns:
 - `last_login` (timestamp, nullable)
 - `created_at` (timestamp)
 - `updated_at` (timestamp)
+
+---
+
+---
+
+## Password Requirements
+
+### Constraints
+- **Minimum length:** 8 characters
+- **Maximum length:** 72 bytes (bcrypt limitation)
+- **Recommended:** 12-16 characters with mix of uppercase, lowercase, numbers, and symbols
+
+### Examples
+```json
+// Good passwords
+"SecurePass123!"
+"StrongP@ssword42"
+"ComplexPwd#2024"
+
+// Too long (will be truncated or rejected)
+"VeryLongPasswordThatExceedsSeventyTwoBytesWhichBcryptCannotHandleProperly12345678"
+
+// Too short (will be rejected)
+"Short1"
+```
+
+### Notes
+- Passwords are hashed using bcrypt before storage
+- The 72-byte limit is a bcrypt technical constraint
+- Passwords longer than 72 bytes will be automatically truncated in older versions
+- The API validates and rejects passwords exceeding 72 bytes
 
 ---
 
