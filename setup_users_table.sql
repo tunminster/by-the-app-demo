@@ -36,13 +36,14 @@ CREATE TRIGGER update_users_updated_at
 
 -- Insert default admin user (password: admin123)
 -- Note: In production, change this password immediately!
+-- This is a valid bcrypt hash for password "admin123"
 INSERT INTO users (username, email, password_hash, name, role, is_active) VALUES
-('admin', 'admin@dentalcare.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8Kz8KzK', 'System Administrator', 'admin', true)
+('admin', 'admin@dentalcare.com', '$2b$12$E0Xl3jlBPzVVUCtQCkXAMu7tU13nzc3aQ7kGtXYtFAcgcyNF5Q/4S', 'System Administrator', 'admin', true)
 ON CONFLICT (username) DO NOTHING;
 
--- Insert some sample users
+-- Insert some sample users (password: admin123 for all)
 INSERT INTO users (username, email, password_hash, name, role, is_active) VALUES
-('receptionist1', 'reception@dentalcare.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8Kz8KzK', 'Jane Receptionist', 'receptionist', true),
-('dentist1', 'dr.smith@dentalcare.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8Kz8KzK', 'Dr. John Smith', 'dentist', true),
-('user1', 'patient@dentalcare.com', '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J/8Kz8KzK', 'Patient User', 'user', true)
+('receptionist1', 'reception@dentalcare.com', '$2b$12$E0Xl3jlBPzVVUCtQCkXAMu7tU13nzc3aQ7kGtXYtFAcgcyNF5Q/4S', 'Jane Receptionist', 'receptionist', true),
+('dentist1', 'dr.smith@dentalcare.com', '$2b$12$E0Xl3jlBPzVVUCtQCkXAMu7tU13nzc3aQ7kGtXYtFAcgcyNF5Q/4S', 'Dr. John Smith', 'dentist', true),
+('user1', 'patient@dentalcare.com', '$2b$12$E0Xl3jlBPzVVUCtQCkXAMu7tU13nzc3aQ7kGtXYtFAcgcyNF5Q/4S', 'Patient User', 'user', true)
 ON CONFLICT (username) DO NOTHING;

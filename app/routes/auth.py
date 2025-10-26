@@ -31,9 +31,18 @@ class UserLogin(BaseModel):
 class UserRegister(BaseModel):
     username: str
     email: EmailStr
-    password: str
+    password: str  # Max 72 bytes for bcrypt
     name: str
     role: str = "user"  # Default role for registration
+    
+    @classmethod
+    def validate_password(cls, v):
+        """Validate password length for bcrypt (max 72 bytes)"""
+        if len(v.encode('utf-8')) > 72:
+            raise ValueError("Password cannot be longer than 72 bytes")
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters")
+        return v
 
 class Token(BaseModel):
     access_token: str
@@ -53,12 +62,40 @@ class UserResponse(BaseModel):
 
 # Helper functions
 def get_password_hash(password: str) -> str:
-    """Hash a password"""
-    return pwd_context.hash(password)
+    """Hash a password (bcrypt max 72 bytes)"""
+    try:
+        # Truncate password to 72 bytes if longer
+        password_bytes = len(password.encode('utf-8'))
+        if password_bytes > 72:
+            password = password[:72]
+        return pwd_context.hash(password)
+    except Exception as e:
+        # If hashing fails for any reason, print error and re-raise
+        print(f"Error hashing password: {e}")
+        raise ValueError(f"Failed to hash password: {str(e)}")
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
-    return pwd_context.verify(plain_password, hashed_password)
+    # Truncate password to 72 bytes if longer (for bcrypt compatibility)
+    # Note: This means passwords longer than 72 bytes will be truncated
+    password_bytes = len(plain_password.encode('utf-8'))
+    original_password = plain_password
+    if password_bytes > 72:
+        plain_password = plain_password[:72]
+    
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except Exception as e:
+        error_msg = str(e).lower()
+        # Check for specific bcrypt error about password length
+        if "password cannot be longer than 72 bytes" in error_msg:
+            # This happens when the hash was created with a password > 72 bytes
+            print(f"⚠️  Password verification failed: Hash was created with password > 72 bytes")
+            print(f"⚠️  Attempted password length: {len(original_password)} characters, {password_bytes} bytes")
+            return False
+        # For other errors, just return False
+        print(f"⚠️  Password verification failed: {e}")
+        return False
 
 def create_access_token(data: dict):
     """Create JWT access token"""
@@ -141,6 +178,14 @@ async def login(user_credentials: UserLogin):
     Endpoint: POST /auth/login
     """
     try:
+        # Validate password length (bcrypt max 72 bytes)
+        password_bytes = len(user_credentials.password.encode('utf-8'))
+        if password_bytes > 72:
+            raise HTTPException(
+                status_code=400,
+                detail="Password cannot be longer than 72 bytes. Please contact support if you need to reset your password."
+            )
+        
         # Try to find user by username or email
         user = get_user_by_username(user_credentials.username)
         if not user:
@@ -175,7 +220,8 @@ async def login(user_credentials: UserLogin):
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+        error_msg = str(e)
+        raise HTTPException(status_code=500, detail=f"Login failed: {error_msg}")
 
 @auth_router.post("/register", response_model=UserResponse)
 async def register(user_data: UserRegister):
@@ -184,6 +230,19 @@ async def register(user_data: UserRegister):
     Endpoint: POST /auth/register
     """
     try:
+        # Validate password length
+        password_bytes = len(user_data.password.encode('utf-8'))
+        if password_bytes > 72:
+            raise HTTPException(
+                status_code=400, 
+                detail="Password cannot be longer than 72 bytes. Please use a shorter password."
+            )
+        if len(user_data.password) < 8:
+            raise HTTPException(
+                status_code=400,
+                detail="Password must be at least 8 characters long"
+            )
+        
         # Check if username or email already exists
         existing_username = get_user_by_username(user_data.username)
         existing_email = get_user_by_email(user_data.email)
