@@ -1,0 +1,116 @@
+# Deploy Kafka Consumer to Azure Kubernetes Service
+# Build and push image to Azure Container Registry; Deploy Kafka Consumer to Azure Kubernetes Service
+
+trigger:
+- master
+
+variables:
+  buildConfiguration: 'Release'
+  tag: '$(Build.BuildNumber)'
+  imageRepository: 'bytheappdemo-consumer'
+  # dockerRegistryServiceConnection: '80d4c17a-3be2-4b84-aa86-b5e6c9bbc991'
+  # containerRegistry: 'pngoacr.azurecr.io'
+  # dockerfilePath: '**/Dockerfile.consumer'
+  # imagePullSecret: 'pngoacr5fe2-auth'
+
+stages:
+  - stage: Build
+    displayName: 'Build Kafka Consumer'
+    jobs:
+      - job: Build
+        displayName: Build Consumer
+        pool:
+          vmImage: ubuntu-latest
+        
+        steps:
+        
+        - task: UsePythonVersion@0
+          inputs:
+            versionSpec: '3.x'
+            addToPath: true
+            architecture: 'x64'
+          displayName: 'Install python version 3.x'
+        
+        - script: |
+            pip install --upgrade pip
+            pip install -r requirements.txt
+          displayName: 'Install dependencies'
+        
+        - script: |
+            echo "Building Kafka Consumer..."
+            echo "Dependencies installed successfully"
+          displayName: 'Build consumer project'
+          
+  - stage: DeployDev
+    displayName: 'Deploy Kafka Consumer to dev'
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+    
+    variables:
+      - group: bytheapp-demo
+      - name: repository-image
+        value: 'bytheapp.azurecr.io/bytheappdemo-consumer:$(Build.BuildNumber)'
+      - name: acr-secret-name
+        value: 'by-the-app-acr-secret'
+      - name: env-name
+        value: 'Production'
+      - name: env-namespace
+        value: 'by-the-app-prod'
+    jobs:
+      - job: DeployConsumer
+        displayName: 'Deploy Kafka Consumer'
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - task: Docker@2
+            inputs:
+              containerRegistry: 'containerRegistry'
+              repository: '$(imageRepository)'
+              command: 'buildAndPush'
+              Dockerfile: '**/Dockerfile.consumer'
+              buildContext: .
+              tags: |
+                $(tag)
+
+          - task: CopyFiles@2
+            inputs:
+              SourceFolder: '$(System.DefaultWorkingDirectory)/manifests'
+              Contents: 'kafka-consumer-deployment.yaml'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/manifests'
+          
+          - task: qetza.replacetokens.replacetokens-task.replacetokens@3
+            displayName: 'Replace tokens in consumer deployment file'
+            inputs:
+              rootDirectory: '$(Build.ArtifactStagingDirectory)/manifests'
+              targetFiles: 'kafka-consumer-deployment.yaml'
+              escapeType: none
+              
+          - script: 'cat $(Build.ArtifactStagingDirectory)/manifests/kafka-consumer-deployment.yaml'
+            displayName: 'Display consumer deployment file'
+            
+          - task: KubectlInstaller@0
+            inputs:
+              kubectlVersion: 'latest'
+
+          - task: Kubernetes@1
+            inputs:
+              connectionType: 'Kubernetes Service Connection'
+              kubernetesServiceEndpoint: 'by-the-app-cluster'
+              namespace: 'by-the-app-prod'
+              command: 'apply'
+              arguments: '-f $(Build.ArtifactStagingDirectory)/manifests/kafka-consumer-deployment.yaml'
+              secretType: 'dockerRegistry'
+              containerRegistryType: 'Container Registry'
+              dockerRegistryEndpoint: 'containerRegistry'
+              secretName: 'by-the-app-acr-secret'
+
+          - script: |
+              echo "Waiting for Kafka Consumer deployment to be ready..."
+              kubectl wait --for=condition=available --timeout=300s deployment/kafka-consumer -n by-the-app-prod
+            displayName: 'Wait for consumer deployment to be ready'
+
+          - script: |
+              echo "Kafka Consumer deployment status:"
+              kubectl get deployment kafka-consumer -n by-the-app-prod
+              kubectl get pods -l app=kafka-consumer -n by-the-app-prod
+            displayName: 'Check consumer deployment status'

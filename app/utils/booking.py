@@ -82,8 +82,17 @@ def book_if_possible(intent: Dict) -> bool:
         print(f"Failed to book slot for {intent['dentist']} on {intent['date']} at {intent['time']}")
         return False
     
-    # Insert appointment
-    insert_appointment(dentist_id, intent["patient_name"], intent["date"], intent["time"])
+    # Insert appointment with phone and treatment
+    phone = intent.get("phone", "N/A")
+    treatment = intent.get("treatment", "General Checkup")
+    insert_appointment(
+        dentist_id, 
+        intent["patient_name"], 
+        intent["date"], 
+        intent["time"],
+        phone=phone,
+        treatment=treatment
+    )
     print(f"Successfully booked appointment for {intent['patient_name']} with {intent['dentist']}")
     return True
 

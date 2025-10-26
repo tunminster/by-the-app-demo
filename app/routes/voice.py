@@ -3,6 +3,7 @@ import json
 import asyncio
 import websockets
 import base64
+from datetime import datetime
 from fastapi import FastAPI, Request, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse, HTMLResponse
 from twilio.twiml.voice_response import VoiceResponse, Connect, Say, Stream, Gather
@@ -18,6 +19,7 @@ from pathlib import Path
 from fastapi.routing import APIRouter
 from app.utils.db import fetch_available_slots, fetch_dentists, find_patient_by_name, find_patient_by_phone, find_patient_by_email, create_new_patient
 from app.utils.booking import build_context_text, parse_booking_intent, parse_booking_intent_ai, book_if_possible
+from app.utils.kafka_producer import ai_response_producer
 
 # Initialize FastAPI app
 voice_router = APIRouter()
@@ -264,9 +266,9 @@ async def send_initial_conversation_item(openai_ws):
     await openai_ws.send(json.dumps(initial_conversation_item))
     await openai_ws.send(json.dumps({"type": "response.create"}))
 
-async def process_ai_text_response(openai_ws, response):
+async def process_ai_text_response(openai_ws, response, call_id=None):
     """
-    Handle AI text responses: detect booking intents and update the DB if necessary.
+    Handle AI text responses: send entire response to Kafka for processing.
     """
     try:
         if response.get("type") == "response.done":
@@ -281,50 +283,32 @@ async def process_ai_text_response(openai_ws, response):
 
             print("🧾 AI said:", text_chunk)
 
-            #intent = parse_booking_intent_ai(text_chunk)
             text_chunk = "".join(text_chunk)
             print("text_chunk ", text_chunk)
 
-            # Check for patient creation request
-            patient_match = re.search(r"PATIENT_CREATION:\s*(\{.*\})", text_chunk, re.DOTALL)
-            if patient_match:
-                print("PATIENT_CREATION found in text_chunk", patient_match.group(0))
-                try:
-                    json_part = patient_match.group(1)
-                    patient_data = json.loads(json_part)
-                    print(" patient_data ", patient_data)
-                    
-                    # Create new patient
-                    patient_id = await create_patient_from_ai_response(openai_ws, patient_data)
-                    if patient_id:
-                        print(f"✅ New patient created with ID: {patient_id}")
-                    else:
-                        print("❌ Failed to create patient")
-                        
-                except Exception as e:
-                    print(f"⚠️ Failed to parse PATIENT_CREATION JSON: {e}")
-                    return
+            # Send entire AI response to Kafka for processing
+            success = ai_response_producer.send_ai_response(
+                call_id=call_id or "unknown",
+                response_type="AI_RESPONSE",
+                data={
+                    "raw_text": text_chunk,
+                    "full_response": response,
+                    "timestamp": datetime.now().isoformat()
+                },
+                metadata={
+                    "source": "voice_ai",
+                    "call_id": call_id or "unknown",
+                    "response_type": "complete_ai_response"
+                }
+            )
             
-            # Check for booking confirmation
-            match = re.search(r"BOOKING_CONFIRMATION:\s*(\{.*\})", text_chunk, re.DOTALL)
-            if match:
-                print("\n\nBOOKING_CONFIRMATION found in text_chunk", match.group(0))
-                try:
-                    json_part = match.group(1)
-                    intent = json.loads(json_part)
-                    print(" intent ", intent)
-                except Exception as e:
-                    print(f"⚠️ Failed to parse BOOKING_INTENT JSON: {e}")
-                    return
+            if success:
+                print("✅ AI response sent to Kafka for processing")
+                # Send confirmation to AI
+                await send_processing_confirmation(openai_ws)
+            else:
+                print("❌ Failed to send AI response to Kafka")
                 
-                # Attempt booking
-                success = book_if_possible(intent)
-                if success:
-                    print(f"✅ Booking saved for {intent['patient_name']} with {intent['dentist']} on {intent['date']} at {intent['time']}")
-                    # Optionally refresh RAG context after booking
-                    await inject_availability_context(openai_ws)
-                else:
-                    print("❌ Booking failed — dentist not found or slot unavailable.")
     except Exception as e:
         print(f"❌ Error processing AI response: {e}")
 
@@ -497,3 +481,26 @@ async def create_patient_from_ai_response(openai_ws, patient_data):
         await openai_ws.send(json.dumps(error_message))
         print(f"❌ Error creating patient: {e}")
         return None
+
+async def send_processing_confirmation(openai_ws):
+    """
+    Send confirmation to AI that response was sent to Kafka for processing.
+    """
+    try:
+        confirmation_message = {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": "✅ Your response has been sent for processing. I'm analyzing your request and will handle any patient creation or appointment booking as needed."
+                    }
+                ]
+            }
+        }
+        await openai_ws.send(json.dumps(confirmation_message))
+        print("✅ Sent processing confirmation to AI")
+    except Exception as e:
+        print(f"❌ Error sending processing confirmation: {e}")
