@@ -55,6 +55,8 @@ spec:
           value: #{POSTGRES-HOST}#
         - name: POSTGRES_PORT
           value: "28370"
+        - name: JWT_SECRET_KEY
+          value: "#{auth-jwt-secret-key}#"
         - name: KAFKA_BOOTSTRAP_SERVERS
           value: "#{kafka-bootstrap-servers}#"
         - name: KAFKA_TOPIC

@@ -37,8 +37,8 @@ pyodbc>=4.0.30  # For SQL Server
 pandas>=1.3.3  # If you're using Pandas for data processing
 
 # Security
-bcrypt
-passlib[bcrypt]  # Alternative hashing (optional)
+bcrypt>=3.2.0,<4.0.0  # Use bcrypt 3.x for passlib compatibility
+passlib[bcrypt]>=1.7.4  # Password hashing with bcrypt support
 pydantic  # Data validation
 email-validator  # Required for Pydantic email validation
 

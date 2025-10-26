@@ -64,10 +64,10 @@ class UserResponse(BaseModel):
 def get_password_hash(password: str) -> str:
     """Hash a password (bcrypt max 72 bytes)"""
     try:
-        # Truncate password to 72 bytes if longer
-        password_bytes = len(password.encode('utf-8'))
-        if password_bytes > 72:
-            password = password[:72]
+        # Truncate password to 72 bytes if longer (encode to bytes, truncate, decode)
+        password_bytes = password.encode('utf-8')
+        if len(password_bytes) > 72:
+            password = password_bytes[:72].decode('utf-8', errors='ignore')
         return pwd_context.hash(password)
     except Exception as e:
         # If hashing fails for any reason, print error and re-raise
@@ -78,10 +78,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
     # Truncate password to 72 bytes if longer (for bcrypt compatibility)
     # Note: This means passwords longer than 72 bytes will be truncated
-    password_bytes = len(plain_password.encode('utf-8'))
     original_password = plain_password
-    if password_bytes > 72:
-        plain_password = plain_password[:72]
+    password_bytes = plain_password.encode('utf-8')
+    if len(password_bytes) > 72:
+        plain_password = password_bytes[:72].decode('utf-8', errors='ignore')
     
     try:
         return pwd_context.verify(plain_password, hashed_password)
@@ -91,7 +91,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         if "password cannot be longer than 72 bytes" in error_msg:
             # This happens when the hash was created with a password > 72 bytes
             print(f"⚠️  Password verification failed: Hash was created with password > 72 bytes")
-            print(f"⚠️  Attempted password length: {len(original_password)} characters, {password_bytes} bytes")
+            print(f"⚠️  Attempted password length: {len(original_password)} characters, {len(password_bytes)} bytes")
             return False
         # For other errors, just return False
         print(f"⚠️  Password verification failed: {e}")

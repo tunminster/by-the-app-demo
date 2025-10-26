@@ -5,13 +5,14 @@ services:
   voice-api:
     build: .
     ports:
-      - "8000:8000"
+      - "8080:8080"
     environment:
       - POSTGRES_DB=${POSTGRES_DB}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-your-secret-key-change-this-in-production}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
       - KAFKA_TOPIC=${KAFKA_TOPIC}
@@ -20,32 +21,33 @@ services:
       - KAFKA_SSL_KEY_FILE=/app/certs/service.key
     volumes:
       - ./certs:/app/certs
-    depends_on:
-      - kafka-consumer
+      - ./app:/app/app:ro  # Mount app code for development (read-only)
+    # depends_on:
+    #   - kafka-consumer  # Commented out since kafka-consumer is disabled
     restart: unless-stopped
 
-  # Kafka Consumer Service
-  kafka-consumer:
-    build:
-      context: .
-      dockerfile: Dockerfile.consumer
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
-      - KAFKA_TOPIC=${KAFKA_TOPIC}
-      - KAFKA_GROUP_ID=${KAFKA_GROUP_ID}
-      - KAFKA_SSL_CA_FILE=/app/certs/ca.pem
-      - KAFKA_SSL_CERT_FILE=/app/certs/service.cert
-      - KAFKA_SSL_KEY_FILE=/app/certs/service.key
-    volumes:
-      - ./certs:/app/certs
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+  # Kafka Consumer Service (commented out for testing)
+  # kafka-consumer:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile.consumer
+  #   environment:
+  #     - POSTGRES_DB=${POSTGRES_DB}
+  #     - POSTGRES_USER=${POSTGRES_USER}
+  #     - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+  #     - POSTGRES_HOST=${POSTGRES_HOST}
+  #     - POSTGRES_PORT=${POSTGRES_PORT}
+  #     - KAFKA_BOOTSTRAP_SERVERS=${KAFKA_BOOTSTRAP_SERVERS}
+  #     - KAFKA_TOPIC=${KAFKA_TOPIC}
+  #     - KAFKA_GROUP_ID=${KAFKA_GROUP_ID}
+  #     - KAFKA_SSL_CA_FILE=/app/certs/ca.pem
+  #     - KAFKA_SSL_CERT_FILE=/app/certs/service.cert
+  #     - KAFKA_SSL_KEY_FILE=/app/certs/service.key
+  #   volumes:
+  #     - ./certs:/app/certs
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
