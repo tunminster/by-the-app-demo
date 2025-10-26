@@ -1,0 +1,73 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-consumer
+  labels:
+    app: kafka-consumer
+spec:
+  replicas: 2  # Scale consumer instances
+  selector:
+    matchLabels:
+      app: kafka-consumer
+  template:
+    metadata:
+      labels:
+        app: kafka-consumer
+    spec:
+      containers:
+      - name: kafka-consumer
+        image: #{repository-image}#
+        command: ["python", "run_kafka_consumer.py"]
+        env:
+        - name: POSTGRES_DB
+          value: defaultdb
+        - name: POSTGRES_USER
+          value: avnadmin
+        - name: POSTGRES_PASSWORD
+          value: "#{POSTGRES-PASSWORD}#"
+        - name: POSTGRES_HOST
+          value: "#{POSTGRES-HOST}#"
+        - name: POSTGRES_PORT
+          value: "28370"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "#{kafka-bootstrap-servers}#"
+        - name: KAFKA_TOPIC
+          value: "ai-responses"
+        - name: KAFKA_GROUP_ID
+          value: "ai-response-processor"
+        - name: KAFKA_SSL_CA_FILE
+          value: "/app/certs/ca.pem"
+        - name: KAFKA_SSL_CERT_FILE
+          value: "/app/certs/service.cert"
+        - name: KAFKA_SSL_KEY_FILE
+          value: "/app/certs/service.key"
+        volumeMounts:
+        - name: kafka-certs
+          mountPath: /app/certs
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: kafka-certs
+        secret:
+          secretName: kafka-certs

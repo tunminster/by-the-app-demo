@@ -54,6 +54,21 @@ spec:
           value: #{POSTGRES-HOST}#
         - name: POSTGRES_PORT
           value: "28370"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "#{kafka-bootstrap-servers}#"
+        - name: KAFKA_TOPIC
+          value: "ai-responses"
+        - name: KAFKA_GROUP_ID
+          value: "ai-response-processor"
+        - name: KAFKA_SSL_CA_FILE
+          value: "/app/certs/ca.pem"
+        - name: KAFKA_SSL_CERT_FILE
+          value: "/app/certs/service.cert"
+        - name: KAFKA_SSL_KEY_FILE
+          value: "/app/certs/service.key"
+        volumeMounts:
+        - name: kafka-certs
+          mountPath: /app/certs
       imagePullSecrets:
         - name: #{acr-secret-name}#
 

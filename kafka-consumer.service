@@ -1,0 +1,28 @@
+[Unit]
+Description=Kafka Consumer Service for AI Response Processing
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/path/to/your/project
+Environment=PYTHONPATH=/path/to/your/project
+ExecStart=/usr/bin/python3 /path/to/your/project/run_kafka_consumer.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables (set these in /etc/environment or use EnvironmentFile)
+Environment=KAFKA_BOOTSTRAP_SERVERS=your-kafka-servers
+Environment=KAFKA_TOPIC=ai-responses
+Environment=KAFKA_GROUP_ID=ai-response-processor
+Environment=POSTGRES_DB=your-db
+Environment=POSTGRES_USER=your-user
+Environment=POSTGRES_PASSWORD=your-password
+Environment=POSTGRES_HOST=your-host
+Environment=POSTGRES_PORT=5432
+
+[Install]
+WantedBy=multi-user.target

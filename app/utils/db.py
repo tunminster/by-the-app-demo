@@ -49,12 +49,12 @@ def mark_slot_booked(dentist_id, date, time):
             WHERE dentist_id = %s AND date = %s
         """, (time, dentist_id, date))
 
-def insert_appointment(dentist_id, patient_name, date, time):
+def insert_appointment(dentist_id, patient_name, date, time, phone=None, treatment="General Checkup"):
     with conn.cursor() as cur:
         cur.execute("""
-            INSERT INTO appointments (dentist_id, patient_name, appointment_date, appointment_time)
-            VALUES (%s, %s, %s, %s)
-        """, (dentist_id, patient_name, date, time))
+            INSERT INTO appointments (dentist_id, patient, phone, appointment_date, appointment_time, treatment)
+            VALUES (%s, %s, %s, %s, %s, %s)
+        """, (dentist_id, patient_name, phone or "N/A", date, time, treatment))
 
 def fetch_dentists():
     """
