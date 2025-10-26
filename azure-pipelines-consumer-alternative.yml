@@ -1,5 +1,5 @@
-# Deploy Kafka Consumer to Azure Kubernetes Service
-# Build and push image to Azure Container Registry; Deploy Kafka Consumer to Azure Kubernetes Service
+# Alternative Deploy Kafka Consumer to Azure Kubernetes Service
+# Uses Azure CLI to configure kubectl properly
 
 trigger:
 - master
@@ -8,10 +8,6 @@ variables:
   buildConfiguration: 'Release'
   tag: '$(Build.BuildNumber)'
   imageRepository: 'bytheappdemo-consumer'
-  # dockerRegistryServiceConnection: '80d4c17a-3be2-4b84-aa86-b5e6c9bbc991'
-  # containerRegistry: 'pngoacr.azurecr.io'
-  # dockerfilePath: '**/Dockerfile.consumer'
-  # imagePullSecret: 'pngoacr5fe2-auth'
 
 stages:
   - stage: Build
@@ -87,46 +83,23 @@ stages:
               
           - script: 'cat $(Build.ArtifactStagingDirectory)/manifests/kafka-consumer-deployment.yaml'
             displayName: 'Display consumer deployment file'
-            
-          - task: KubectlInstaller@0
-            inputs:
-              kubectlVersion: 'latest'
 
-          - task: Kubernetes@1
+          - task: AzureCLI@2
+            displayName: 'Deploy Kafka Consumer using Azure CLI'
             inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: 'by-the-app-cluster'
-              namespace: 'by-the-app-prod'
-              command: 'apply'
-              arguments: '-f $(Build.ArtifactStagingDirectory)/manifests/kafka-consumer-deployment.yaml'
-              secretType: 'dockerRegistry'
-              containerRegistryType: 'Container Registry'
-              dockerRegistryEndpoint: 'containerRegistry'
-              secretName: 'by-the-app-acr-secret'
-
-          - task: Kubernetes@1
-            displayName: 'Wait for consumer deployment to be ready'
-            inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: 'by-the-app-cluster'
-              namespace: 'by-the-app-prod'
-              command: 'wait'
-              arguments: '--for=condition=available --timeout=300s deployment/kafka-consumer'
-
-          - task: Kubernetes@1
-            displayName: 'Check consumer deployment status'
-            inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: 'by-the-app-cluster'
-              namespace: 'by-the-app-prod'
-              command: 'get'
-              arguments: 'deployment kafka-consumer'
-
-          - task: Kubernetes@1
-            displayName: 'Check consumer pods'
-            inputs:
-              connectionType: 'Kubernetes Service Connection'
-              kubernetesServiceEndpoint: 'by-the-app-cluster'
-              namespace: 'by-the-app-prod'
-              command: 'get'
-              arguments: 'pods -l app=kafka-consumer'
+              azureSubscription: 'containerRegistry'
+              scriptType: 'bash'
+              scriptLocation: 'inlineScript'
+              inlineScript: |
+                echo "Configuring kubectl for Azure Kubernetes Service..."
+                az aks get-credentials --resource-group $(AKS_RESOURCE_GROUP) --name $(AKS_CLUSTER_NAME) --overwrite-existing
+                
+                echo "Deploying Kafka Consumer..."
+                kubectl apply -f $(Build.ArtifactStagingDirectory)/manifests/kafka-consumer-deployment.yaml
+                
+                echo "Waiting for Kafka Consumer deployment to be ready..."
+                kubectl wait --for=condition=available --timeout=300s deployment/kafka-consumer -n by-the-app-prod
+                
+                echo "Kafka Consumer deployment status:"
+                kubectl get deployment kafka-consumer -n by-the-app-prod
+                kubectl get pods -l app=kafka-consumer -n by-the-app-prod
