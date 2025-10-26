@@ -68,6 +68,8 @@ spec:
             - "import sys; sys.exit(0)"
           initialDelaySeconds: 10
           periodSeconds: 10
+      imagePullSecrets:
+      - name: #{acr-secret-name}#
       volumes:
       - name: kafka-certs
         secret:
