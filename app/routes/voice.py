@@ -286,9 +286,9 @@ async def process_ai_text_response(openai_ws, response):
             print("text_chunk ", text_chunk)
 
             # Check for patient creation request
-            patient_match = re.search(r"\n\nPATIENT_CREATION:\s*(\{.*?\})", text_chunk, re.DOTALL)
+            patient_match = re.search(r"PATIENT_CREATION:\s*(\{.*\})", text_chunk, re.DOTALL)
             if patient_match:
-                print("\n\nPATIENT_CREATION found in text_chunk", patient_match.group(0))
+                print("PATIENT_CREATION found in text_chunk", patient_match.group(0))
                 try:
                     json_part = patient_match.group(1)
                     patient_data = json.loads(json_part)
@@ -306,7 +306,7 @@ async def process_ai_text_response(openai_ws, response):
                     return
             
             # Check for booking confirmation
-            match = re.search(r"\n\nBOOKING_CONFIRMATION:\s*(\{.*?\})", text_chunk, re.DOTALL)
+            match = re.search(r"BOOKING_CONFIRMATION:\s*(\{.*\})", text_chunk, re.DOTALL)
             if match:
                 print("\n\nBOOKING_CONFIRMATION found in text_chunk", match.group(0))
                 try:
