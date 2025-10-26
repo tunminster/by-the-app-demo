@@ -172,6 +172,9 @@ class AIResponseConsumer:
             
             logger.info(f"📝 AI Response Text: {raw_text[:200]}...")
             
+            # Debug: Log the full response for troubleshooting
+            logger.info(f"🔍 Full AI Response: {raw_text}")
+            
             # Parse the AI response for different actions
             actions_taken = []
             

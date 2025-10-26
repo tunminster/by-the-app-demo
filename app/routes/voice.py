@@ -28,9 +28,17 @@ openai.api_key = os.environ.get('OPENAI_API_KEY')
 OPENAI_API_KEY = os.environ.get('OPENAI_API_KEY')
 SYSTEM_MESSAGE = """
     You are a helpful dental receptionist. Use the availability to schedule appointments for patients. Ask clarifying questions if needed. 
+    
+    PATIENT MANAGEMENT:
+    - For NEW patients, collect: full name, email, phone, date of birth (MM/DD/YYYY format)
+    - After collecting ALL patient information for NEW patients, output this EXACT format (do NOT speak it):
+    PATIENT_CREATION: {"name": "John Smith", "email": "john@email.com", "phone": "(555) 123-4567", "date_of_birth": "01/15/1985"}
+    
+    BOOKING CONFIRMATION:
     When the patient agrees to book, ALWAYS send a hidden message in the format: 
-    BOOKING_CONFIRMATION: {"dentist": "Dr. Sarah Nguyen", "date": "2025-10-25", "time": "10:00", "patient_name": "Alice Jones"} 
-    Do not say this out loud. Just include it as a text output message.
+    BOOKING_CONFIRMATION: {"dentist": "Dr. Sarah Nguyen", "date": "2025-10-25", "time": "10:00", "patient_name": "Alice Jones", "phone": "(408) 858-2309", "treatment": "General Checkup"} 
+    
+    IMPORTANT: Do NOT speak these formats (PATIENT_CREATION or BOOKING_CONFIRMATION) out loud. They are internal system messages only.
     """
 VOICE = "alloy"
 PORT = int(os.getenv("PORT", 5050))
@@ -285,6 +293,22 @@ async def process_ai_text_response(openai_ws, response, call_id=None):
 
             text_chunk = "".join(text_chunk)
             print("text_chunk ", text_chunk)
+            
+            # Debug: Check if PATIENT_CREATION is in the response
+            if "PATIENT_CREATION:" in text_chunk:
+                print("✅ PATIENT_CREATION detected in AI response!")
+            else:
+                print("❌ PATIENT_CREATION NOT found in AI response")
+                # Send reminder if this might be a new patient scenario
+                if any(keyword in text_chunk.lower() for keyword in ["new patient", "create", "collect", "information", "record"]):
+                    print("🔄 Sending PATIENT_CREATION reminder to AI...")
+                    await send_patient_creation_reminder(openai_ws)
+            
+            # Debug: Check if BOOKING_CONFIRMATION is in the response
+            if "BOOKING_CONFIRMATION:" in text_chunk:
+                print("✅ BOOKING_CONFIRMATION detected in AI response!")
+            else:
+                print("❌ BOOKING_CONFIRMATION NOT found in AI response")
 
             # Send entire AI response to Kafka for processing
             success = ai_response_producer.send_ai_response(
@@ -394,19 +418,33 @@ async def inject_patient_context(openai_ws, caller_name=None, caller_phone=None)
                         "type": "input_text",
                         "text": (
                             f"{patient_context}"
-                            "PATIENT VERIFICATION INSTRUCTIONS:\n"
-                            "1. If existing patients are found above, confirm their details (name, phone, email, date of birth)\n"
-                            "2. If no existing patients found, collect NEW PATIENT information:\n"
-                            "   - Full name\n"
-                            "   - Phone number\n"
+                            "CRITICAL PATIENT MANAGEMENT INSTRUCTIONS:\n\n"
+                            "SCENARIO 1 - EXISTING PATIENT FOUND:\n"
+                            "1. Confirm their details: 'I found your record. Let me confirm your details.'\n"
+                            "2. Verify: name, phone, email, date of birth\n"
+                            "3. Proceed with appointment booking\n\n"
+                            
+                            "SCENARIO 2 - NEW PATIENT (NO EXISTING RECORDS):\n"
+                            "1. Say: 'I'll need to create a new patient record for you. Let me collect your information.'\n"
+                            "2. Collect ALL required information:\n"
+                            "   - Full name (first and last)\n"
+                            "   - Phone number (with area code)\n"
                             "   - Email address\n"
                             "   - Date of birth (MM/DD/YYYY format)\n"
-                            "3. For new patients, say: 'I'll need to create a new patient record for you. Let me collect your information.'\n"
-                            "4. For existing patients, say: 'I found your record. Let me confirm your details.'\n"
-                            "5. Always verify the information before proceeding with appointment booking.\n"
-                            "6. If creating a new patient, use the collected information to create the patient record before booking.\n"
-                            "7. When you have collected all patient information, output exactly this format (do not speak this out loud):\n"
-                            "PATIENT_CREATION: {\"name\": \"John Smith\", \"email\": \"john@email.com\", \"phone\": \"(555) 123-4567\", \"date_of_birth\": \"01/15/1985\"}"
+                            "3. Verify each piece of information with the caller\n"
+                            "4. IMPORTANT: After collecting ALL information, you MUST output this EXACT format in your response (do NOT speak this out loud):\n\n"
+                            
+                            "PATIENT_CREATION: {\"name\": \"[FULL_NAME]\", \"email\": \"[EMAIL]\", \"phone\": \"[PHONE]\", \"date_of_birth\": \"[MM/DD/YYYY]\"}\n\n"
+                            
+                            "EXAMPLE OUTPUT (do not speak this):\n"
+                            "PATIENT_CREATION: {\"name\": \"John Smith\", \"email\": \"john@email.com\", \"phone\": \"(555) 123-4567\", \"date_of_birth\": \"01/15/1985\"}\n\n"
+                            
+                            "CRITICAL RULES:\n"
+                            "- You MUST output PATIENT_CREATION format for NEW patients\n"
+                            "- Replace [FULL_NAME], [EMAIL], [PHONE], [DATE_OF_BIRTH] with actual values\n"
+                            "- Do NOT speak the PATIENT_CREATION format out loud\n"
+                            "- Only output PATIENT_CREATION after collecting ALL required information\n"
+                            "- Always verify information before outputting PATIENT_CREATION"
                         )
                     }
                 ]
@@ -504,3 +542,30 @@ async def send_processing_confirmation(openai_ws):
         print("✅ Sent processing confirmation to AI")
     except Exception as e:
         print(f"❌ Error sending processing confirmation: {e}")
+
+async def send_patient_creation_reminder(openai_ws):
+    """
+    Send a reminder to the AI to output PATIENT_CREATION format if it hasn't already.
+    """
+    try:
+        reminder_message = {
+            "type": "conversation.item.create",
+            "item": {
+                "type": "message",
+                "role": "system",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": (
+                            "REMINDER: If you have collected all patient information (name, email, phone, date of birth) "
+                            "and this is a NEW patient, you MUST output the PATIENT_CREATION format in your next response. "
+                            "Example: PATIENT_CREATION: {\"name\": \"John Smith\", \"email\": \"john@email.com\", \"phone\": \"(555) 123-4567\", \"date_of_birth\": \"01/15/1985\"}"
+                        )
+                    }
+                ]
+            }
+        }
+        await openai_ws.send(json.dumps(reminder_message))
+        print("✅ Sent PATIENT_CREATION reminder to AI")
+    except Exception as e:
+        print(f"❌ Error sending PATIENT_CREATION reminder: {e}")
