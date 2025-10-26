@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 # Import routers and register them
 from app.routes.voice import voice_router
 
+from app.routes.auth import auth_router
 from app.routes.dentist import dentist_router
 from app.routes.user import user_router
 from app.routes.patient import patient_router
@@ -41,6 +42,7 @@ def create_app():
     }
 
     app.include_router(voice_router, prefix="/voice", tags=["voice"])
+    app.include_router(auth_router, prefix="/auth", tags=["authentication"])
     app.include_router(dentist_router, prefix="/api", tags=["dentists"])
     app.include_router(user_router, prefix="/api", tags=["users"])
     app.include_router(patient_router, prefix="/api", tags=["patients"])
