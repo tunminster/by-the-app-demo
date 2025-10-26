@@ -21,12 +21,13 @@ class AIResponseConsumer:
     def _initialize_consumer(self):
         """Initialize Kafka consumer with Aiven configuration."""
         try:
+            # Check if SSL certificates are available
+            ssl_ca_file = os.getenv("KAFKA_SSL_CA_FILE")
+            ssl_cert_file = os.getenv("KAFKA_SSL_CERT_FILE")
+            ssl_key_file = os.getenv("KAFKA_SSL_KEY_FILE")
+            
             kafka_config = {
                 'bootstrap_servers': os.getenv("KAFKA_BOOTSTRAP_SERVERS"),
-                'security_protocol': 'SSL',
-                'ssl_cafile': os.getenv("KAFKA_SSL_CA_FILE"),
-                'ssl_certfile': os.getenv("KAFKA_SSL_CERT_FILE"),
-                'ssl_keyfile': os.getenv("KAFKA_SSL_KEY_FILE"),
                 'value_deserializer': lambda m: json.loads(m.decode('utf-8')),
                 'key_deserializer': lambda m: m.decode('utf-8') if m else None,
                 'group_id': os.getenv("KAFKA_GROUP_ID", "ai-response-processor"),
@@ -34,6 +35,19 @@ class AIResponseConsumer:
                 'enable_auto_commit': True,
                 'api_version': (0, 10, 1)
             }
+            
+            # Add SSL configuration only if certificates are available
+            if ssl_ca_file and ssl_cert_file and ssl_key_file:
+                kafka_config.update({
+                    'security_protocol': 'SSL',
+                    'ssl_cafile': ssl_ca_file,
+                    'ssl_certfile': ssl_cert_file,
+                    'ssl_keyfile': ssl_key_file
+                })
+                logger.info("🔒 Using SSL configuration for Kafka")
+            else:
+                kafka_config['security_protocol'] = 'PLAINTEXT'
+                logger.info("🔓 Using PLAINTEXT configuration for Kafka (no SSL)")
             
             # Remove None values
             kafka_config = {k: v for k, v in kafka_config.items() if v is not None}

@@ -36,15 +36,10 @@ spec:
           value: "ai-responses"
         - name: KAFKA_GROUP_ID
           value: "ai-response-processor"
-        - name: KAFKA_SSL_CA_FILE
-          value: "/app/certs/ca.pem"
-        - name: KAFKA_SSL_CERT_FILE
-          value: "/app/certs/service.cert"
-        - name: KAFKA_SSL_KEY_FILE
-          value: "/app/certs/service.key"
-        volumeMounts:
-        - name: kafka-certs
-          mountPath: /app/certs
+        # SSL disabled - remove these environment variables
+        # - name: KAFKA_SSL_CA_FILE
+        # - name: KAFKA_SSL_CERT_FILE
+        # - name: KAFKA_SSL_KEY_FILE
         resources:
           requests:
             memory: "128Mi"
@@ -68,7 +63,4 @@ spec:
             - "import sys; sys.exit(0)"
           initialDelaySeconds: 10
           periodSeconds: 10
-      volumes:
-      - name: kafka-certs
-        secret:
-          secretName: kafka-certs
+      # No volumes needed for non-SSL setup
