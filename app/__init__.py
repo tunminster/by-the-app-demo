@@ -14,6 +14,7 @@ from app.routes.user import user_router
 from app.routes.patient import patient_router
 from app.routes.availability import availability_router
 from app.routes.appointment import appointment_router
+from app.routes.dashboard import dashboard_router
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -48,6 +49,7 @@ def create_app():
     app.include_router(patient_router, prefix="/api", tags=["patients"])
     app.include_router(availability_router, prefix="/api", tags=["availability"])
     app.include_router(appointment_router, prefix="/api", tags=["appointments"])
+    app.include_router(dashboard_router, prefix="/api", tags=["dashboard"])
 
     app.add_middleware(
         CORSMiddleware,
