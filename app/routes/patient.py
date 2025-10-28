@@ -26,6 +26,9 @@ class PatientBase(BaseModel):
     email: EmailStr
     phone: str
     date_of_birth: date
+    address: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    medical_history: Optional[str] = None
     status: str = "active"  # Default status
 
 class PatientCreate(PatientBase):
@@ -36,6 +39,9 @@ class PatientUpdate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     date_of_birth: Optional[date] = None
+    address: Optional[str] = None
+    emergency_contact: Optional[str] = None
+    medical_history: Optional[str] = None
     status: Optional[str] = None
 
 class PatientResponse(PatientBase):
@@ -128,8 +134,8 @@ def get_all_patients() -> List[dict]:
     """Get all patients"""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            SELECT id, name, email, phone, date_of_birth, last_visit, 
-                   next_appointment, status, created_at, updated_at 
+            SELECT id, name, email, phone, date_of_birth, address, emergency_contact, medical_history, 
+                   last_visit, next_appointment, status, created_at, updated_at 
             FROM patients 
             ORDER BY created_at DESC
         """)
@@ -139,15 +145,18 @@ def create_patient(patient_data: PatientCreate) -> dict:
     """Create a new patient"""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            INSERT INTO patients (name, email, phone, date_of_birth, status)
-            VALUES (%s, %s, %s, %s, %s)
-            RETURNING id, name, email, phone, date_of_birth, last_visit, 
+            INSERT INTO patients (name, email, phone, date_of_birth, address, emergency_contact, medical_history, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id, name, email, phone, date_of_birth, address, emergency_contact, medical_history, last_visit, 
                       next_appointment, status, created_at, updated_at
         """, (
             patient_data.name,
             patient_data.email,
             patient_data.phone,
             patient_data.date_of_birth,
+            patient_data.address,
+            patient_data.emergency_contact,
+            patient_data.medical_history,
             patient_data.status
         ))
         return cur.fetchone()
@@ -177,8 +186,8 @@ def update_patient(patient_id: int, patient_data: PatientUpdate) -> Optional[dic
             UPDATE patients 
             SET {', '.join(update_fields)}
             WHERE id = %s
-            RETURNING id, name, email, phone, date_of_birth, last_visit, 
-                      next_appointment, status, created_at, updated_at
+            RETURNING id, name, email, phone, date_of_birth, address, emergency_contact, medical_history, 
+                      last_visit, next_appointment, status, created_at, updated_at
         """, values)
         return cur.fetchone()
 
