@@ -25,8 +25,8 @@ class AppointmentBase(BaseModel):
     patient: str
     phone: str
     dentist_id: int
-    date: date
-    time: str  # Format: "HH:MM"
+    appointment_date: date
+    appointment_time: str  # Format: "HH:MM"
     treatment: str
     status: str = "confirmed"  # Default status
     notes: Optional[str] = None
@@ -38,8 +38,8 @@ class AppointmentUpdate(BaseModel):
     patient: Optional[str] = None
     phone: Optional[str] = None
     dentist_id: Optional[int] = None
-    date: Optional[date] = None
-    time: Optional[str] = None
+    appointment_date: Optional[date] = None
+    appointment_time: Optional[str] = None
     treatment: Optional[str] = None
     status: Optional[str] = None
     notes: Optional[str] = None
@@ -117,6 +117,22 @@ def require_authenticated_user(current_user: dict = Depends(get_current_user)) -
     return current_user
 
 # Database helper functions
+def format_appointment_data(appointment: dict) -> dict:
+    """Format appointment data for API response"""
+    if appointment:
+        # Convert time object to string if needed
+        if 'appointment_time' in appointment and appointment['appointment_time']:
+            if hasattr(appointment['appointment_time'], 'strftime'):
+                appointment['appointment_time'] = appointment['appointment_time'].strftime('%H:%M')
+        
+        # Ensure all required fields have default values
+        appointment.setdefault('status', 'confirmed')
+        appointment.setdefault('notes', None)
+        appointment.setdefault('created_at', datetime.now(timezone.utc))
+        appointment.setdefault('updated_at', datetime.now(timezone.utc))
+    
+    return appointment
+
 def get_appointment_by_id(appointment_id: int) -> Optional[dict]:
     """Get a single appointment by ID"""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -126,7 +142,8 @@ def get_appointment_by_id(appointment_id: int) -> Optional[dict]:
             JOIN dentists d ON a.dentist_id = d.id
             WHERE a.id = %s
         """, (appointment_id,))
-        return cur.fetchone()
+        result = cur.fetchone()
+        return format_appointment_data(result)
 
 def get_all_appointments() -> List[dict]:
     """Get all appointments"""
@@ -137,7 +154,8 @@ def get_all_appointments() -> List[dict]:
             JOIN dentists d ON a.dentist_id = d.id
             ORDER BY a.appointment_date, a.appointment_time
         """)
-        return cur.fetchall()
+        results = cur.fetchall()
+        return [format_appointment_data(appointment) for appointment in results]
 
 def create_appointment(appointment_data: AppointmentCreate) -> dict:
     """Create a new appointment"""
@@ -170,15 +188,15 @@ def create_appointment(appointment_data: AppointmentCreate) -> dict:
             appointment_data.patient,
             appointment_data.phone,
             appointment_data.dentist_id,
-            appointment_data.date,
-            appointment_data.time,
+            appointment_data.appointment_date,
+            appointment_data.appointment_time,
             appointment_data.treatment,
             appointment_data.status,
             appointment_data.notes
         ))
         result = cur.fetchone()
         result['dentist_name'] = dentist['name']
-        return result
+        return format_appointment_data(result)
 
 def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate) -> Optional[dict]:
     """Update an existing appointment"""
@@ -188,6 +206,13 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
     
     for field, value in appointment_data.dict(exclude_unset=True).items():
         if value is not None:
+            # Map Pydantic field names to database column names
+            db_field = field
+            if field == "appointment_date":
+                db_field = "appointment_date"
+            elif field == "appointment_time":
+                db_field = "appointment_time"
+            
             if field == "dentist_id":
                 # Check if new dentist exists
                 with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -196,14 +221,14 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
                     if not dentist:
                         raise HTTPException(status_code=404, detail="Dentist not found")
             
-            update_fields.append(f"{field} = %s")
+            update_fields.append(f"{db_field} = %s")
             values.append(value)
     
     if not update_fields:
         return get_appointment_by_id(appointment_id)
     
     # Check for time conflicts if date/time/dentist is being updated
-    if any(field in appointment_data.dict(exclude_unset=True) for field in ['dentist_id', 'date', 'time']):
+    if any(field in appointment_data.dict(exclude_unset=True) for field in ['dentist_id', 'appointment_date', 'appointment_time']):
         # Get current appointment data
         current_appointment = get_appointment_by_id(appointment_id)
         if not current_appointment:
@@ -211,8 +236,8 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
         
         # Use new values or current values
         dentist_id = appointment_data.dentist_id or current_appointment['dentist_id']
-        appointment_date = appointment_data.date or current_appointment['appointment_date']
-        appointment_time = appointment_data.time or current_appointment['appointment_time']
+        appointment_date = appointment_data.appointment_date or current_appointment['appointment_date']
+        appointment_time = appointment_data.appointment_time or current_appointment['appointment_time']
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -248,7 +273,7 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
                 dentist = dentist_cur.fetchone()
                 result['dentist_name'] = dentist['name'] if dentist else None
         
-        return result
+        return format_appointment_data(result)
 
 def delete_appointment(appointment_id: int) -> bool:
     """Delete an appointment"""
@@ -302,7 +327,8 @@ def search_appointments(
             WHERE {where_clause}
             ORDER BY a.appointment_date, a.appointment_time
         """, params)
-        return cur.fetchall()
+        results = cur.fetchall()
+        return [format_appointment_data(appointment) for appointment in results]
 
 def get_appointments_by_dentist(dentist_id: int, date: date = None) -> List[dict]:
     """Get appointments for a specific dentist"""
@@ -323,7 +349,8 @@ def get_appointments_by_dentist(dentist_id: int, date: date = None) -> List[dict
                 WHERE a.dentist_id = %s
                 ORDER BY a.appointment_date, a.appointment_time
             """, (dentist_id,))
-        return cur.fetchall()
+        results = cur.fetchall()
+        return [format_appointment_data(appointment) for appointment in results]
 
 def get_appointments_by_patient(patient_name: str) -> List[dict]:
     """Get appointments for a specific patient"""
@@ -335,7 +362,8 @@ def get_appointments_by_patient(patient_name: str) -> List[dict]:
             WHERE a.patient ILIKE %s
             ORDER BY a.appointment_date, a.appointment_time
         """, (f"%{patient_name}%",))
-        return cur.fetchall()
+        results = cur.fetchall()
+        return [format_appointment_data(appointment) for appointment in results]
 
 def update_appointment_status(appointment_id: int, status: str) -> bool:
     """Update appointment status"""
