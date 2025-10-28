@@ -22,6 +22,7 @@ security = HTTPBearer()
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 7
 
 # Pydantic models
 class UserLogin(BaseModel):
@@ -46,8 +47,12 @@ class UserRegister(BaseModel):
 
 class Token(BaseModel):
     access_token: str
+    refresh_token: str
     token_type: str
     user: dict
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str
 
 class UserResponse(BaseModel):
     id: int
@@ -101,7 +106,15 @@ def create_access_token(data: dict):
     """Create JWT access token"""
     to_encode = data.copy()
     expire = datetime.now(timezone.utc).replace(microsecond=0) + dt.timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def create_refresh_token(data: dict):
+    """Create JWT refresh token"""
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc).replace(microsecond=0) + dt.timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
@@ -206,14 +219,16 @@ async def login(user_credentials: UserLogin):
         # Update last login
         update_last_login(user['id'])
         
-        # Create access token
+        # Create access token and refresh token
         access_token = create_access_token(data={"sub": user['username']})
+        refresh_token = create_refresh_token(data={"sub": user['username']})
         
         # Remove password hash from response
         user_response = {k: v for k, v in user.items() if k != 'password_hash'}
         
         return {
             "access_token": access_token,
+            "refresh_token": refresh_token,
             "token_type": "bearer",
             "user": user_response
         }
@@ -266,3 +281,63 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
     Endpoint: GET /auth/me
     """
     return current_user
+
+@auth_router.post("/refresh", response_model=Token)
+async def refresh_token(refresh_request: RefreshTokenRequest):
+    """
+    Refresh access token using refresh token
+    Endpoint: POST /auth/refresh
+    """
+    try:
+        # Decode and validate refresh token
+        try:
+            payload = jwt.decode(refresh_request.refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+            username: str = payload.get("sub")
+            token_type: str = payload.get("type")
+            
+            if username is None or token_type != "refresh":
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid refresh token"
+                )
+        except PyJWTError:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token"
+            )
+        
+        # Get user from database
+        user = get_user_by_username(username)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found"
+            )
+        
+        if not user.get('is_active', False):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account is deactivated"
+            )
+        
+        # Create new access token and refresh token
+        access_token = create_access_token(data={"sub": user['username']})
+        new_refresh_token = create_refresh_token(data={"sub": user['username']})
+        
+        # Remove password hash from response
+        user_response = {k: v for k, v in user.items() if k != 'password_hash'}
+        
+        return {
+            "access_token": access_token,
+            "refresh_token": new_refresh_token,
+            "token_type": "bearer",
+            "user": user_response
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Token refresh failed: {str(e)}"
+        )
