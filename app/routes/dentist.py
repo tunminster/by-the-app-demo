@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, timezone
 import jwt
 from jwt import PyJWTError
@@ -21,6 +21,11 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-product
 ALGORITHM = "HS256"
 
 # Pydantic models for request/response
+class WorkingHours(BaseModel):
+    """Working hours for a single day"""
+    start: str  # Format: "HH:MM"
+    end: str    # Format: "HH:MM"
+
 class DentistBase(BaseModel):
     name: str
     specialty: str
@@ -29,6 +34,7 @@ class DentistBase(BaseModel):
     license: str
     years_of_experience: int
     working_days: str  # e.g., "5 days/week"
+    working_hours: Dict[str, WorkingHours]  # Day -> Working Hours
 
 class DentistCreate(DentistBase):
     pass
@@ -41,6 +47,7 @@ class DentistUpdate(BaseModel):
     license: Optional[str] = None
     years_of_experience: Optional[int] = None
     working_days: Optional[str] = None
+    working_hours: Optional[Dict[str, WorkingHours]] = None
 
 class DentistResponse(DentistBase):
     id: int
@@ -102,22 +109,45 @@ def require_admin_or_dentist(current_user: dict = Depends(get_current_user)) -> 
 # Database helper functions
 def get_dentist_by_id(dentist_id: int) -> Optional[dict]:
     """Get a single dentist by ID"""
+    import json
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM dentists WHERE id = %s", (dentist_id,))
-        return cur.fetchone()
+        result = cur.fetchone()
+        
+        # Convert JSONB working_hours to dict if it exists
+        if result and result.get('working_hours'):
+            result['working_hours'] = json.loads(result['working_hours'])
+        
+        return result
 
 def get_all_dentists() -> List[dict]:
     """Get all dentists"""
+    import json
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM dentists ORDER BY name")
-        return cur.fetchall()
+        results = cur.fetchall()
+        
+        # Convert JSONB working_hours to dict
+        for result in results:
+            if result.get('working_hours'):
+                result['working_hours'] = json.loads(result['working_hours'])
+        
+        return results
 
 def create_dentist(dentist_data: DentistCreate) -> dict:
     """Create a new dentist"""
+    # Convert working_hours to JSON string
+    working_hours_json = None
+    if dentist_data.working_hours:
+        # Convert Pydantic models to dict
+        working_hours_dict = {day: hours.dict() for day, hours in dentist_data.working_hours.items()}
+        import json
+        working_hours_json = json.dumps(working_hours_dict)
+    
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
-            INSERT INTO dentists (name, specialty, email, phone, license, years_of_experience, working_days)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO dentists (name, specialty, email, phone, license, years_of_experience, working_days, working_hours)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
             RETURNING *
         """, (
             dentist_data.name,
@@ -126,9 +156,17 @@ def create_dentist(dentist_data: DentistCreate) -> dict:
             dentist_data.phone,
             dentist_data.license,
             dentist_data.years_of_experience,
-            dentist_data.working_days
+            dentist_data.working_days,
+            working_hours_json
         ))
-        return cur.fetchone()
+        result = cur.fetchone()
+        
+        # Convert JSONB working_hours back to dict if it exists
+        if result and result.get('working_hours'):
+            import json
+            result['working_hours'] = json.loads(result['working_hours'])
+        
+        return result
 
 def update_dentist(dentist_id: int, dentist_data: DentistUpdate) -> Optional[dict]:
     """Update an existing dentist"""
@@ -144,6 +182,28 @@ def update_dentist(dentist_id: int, dentist_data: DentistUpdate) -> Optional[dic
     if not update_fields:
         return get_dentist_by_id(dentist_id)
     
+def update_dentist(dentist_id: int, dentist_data: DentistUpdate) -> Optional[dict]:
+    """Update an existing dentist"""
+    import json
+    # Build dynamic update query
+    update_fields = []
+    values = []
+    
+    for field, value in dentist_data.dict(exclude_unset=True).items():
+        if value is not None:
+            # Handle working_hours specially
+            if field == 'working_hours':
+                # Convert Pydantic models to dict
+                working_hours_dict = {day: hours.dict() for day, hours in value.items()}
+                values.append(json.dumps(working_hours_dict))
+                update_fields.append(f"{field} = %s::jsonb")
+            else:
+                values.append(value)
+                update_fields.append(f"{field} = %s")
+    
+    if not update_fields:
+        return get_dentist_by_id(dentist_id)
+    
     values.append(dentist_id)
     
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -153,7 +213,13 @@ def update_dentist(dentist_id: int, dentist_data: DentistUpdate) -> Optional[dic
             WHERE id = %s
             RETURNING *
         """, values)
-        return cur.fetchone()
+        result = cur.fetchone()
+        
+        # Convert JSONB working_hours back to dict if it exists
+        if result and result.get('working_hours'):
+            result['working_hours'] = json.loads(result['working_hours'])
+        
+        return result
 
 def delete_dentist(dentist_id: int) -> bool:
     """Delete a dentist"""
