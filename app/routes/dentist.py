@@ -109,28 +109,23 @@ def require_admin_or_dentist(current_user: dict = Depends(get_current_user)) -> 
 # Database helper functions
 def get_dentist_by_id(dentist_id: int) -> Optional[dict]:
     """Get a single dentist by ID"""
-    import json
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM dentists WHERE id = %s", (dentist_id,))
         result = cur.fetchone()
         
-        # Convert JSONB working_hours to dict if it exists
-        if result and result.get('working_hours'):
-            result['working_hours'] = json.loads(result['working_hours'])
+        # working_hours is already a dict from psycopg2 JSONB
+        # No need to parse it
         
         return result
 
 def get_all_dentists() -> List[dict]:
     """Get all dentists"""
-    import json
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("SELECT * FROM dentists ORDER BY name")
         results = cur.fetchall()
         
-        # Convert JSONB working_hours to dict
-        for result in results:
-            if result.get('working_hours'):
-                result['working_hours'] = json.loads(result['working_hours'])
+        # working_hours is already a dict from psycopg2 JSONB
+        # No need to parse it
         
         return results
 
@@ -161,10 +156,8 @@ def create_dentist(dentist_data: DentistCreate) -> dict:
         ))
         result = cur.fetchone()
         
-        # Convert JSONB working_hours back to dict if it exists
-        if result and result.get('working_hours'):
-            import json
-            result['working_hours'] = json.loads(result['working_hours'])
+        # working_hours is already a dict from psycopg2 JSONB
+        # No need to parse it
         
         return result
 
@@ -215,9 +208,8 @@ def update_dentist(dentist_id: int, dentist_data: DentistUpdate) -> Optional[dic
         """, values)
         result = cur.fetchone()
         
-        # Convert JSONB working_hours back to dict if it exists
-        if result and result.get('working_hours'):
-            result['working_hours'] = json.loads(result['working_hours'])
+        # working_hours is already a dict from psycopg2 JSONB
+        # No need to parse it
         
         return result
 
