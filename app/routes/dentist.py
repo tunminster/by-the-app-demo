@@ -134,8 +134,13 @@ def create_dentist(dentist_data: DentistCreate) -> dict:
     # Convert working_hours to JSON string
     working_hours_json = None
     if dentist_data.working_hours:
-        # Convert Pydantic models to dict
-        working_hours_dict = {day: hours.dict() for day, hours in dentist_data.working_hours.items()}
+        # Convert entries to plain dicts (supports both Pydantic models and plain dicts)
+        working_hours_dict = {}
+        for day, hours in dentist_data.working_hours.items():
+            if hasattr(hours, "dict"):
+                working_hours_dict[day] = hours.dict()
+            else:
+                working_hours_dict[day] = hours
         import json
         working_hours_json = json.dumps(working_hours_dict)
     
@@ -186,8 +191,13 @@ def update_dentist(dentist_id: int, dentist_data: DentistUpdate) -> Optional[dic
         if value is not None:
             # Handle working_hours specially
             if field == 'working_hours':
-                # Convert Pydantic models to dict
-                working_hours_dict = {day: hours.dict() for day, hours in value.items()}
+                # Convert entries to plain dicts (supports both Pydantic models and plain dicts)
+                working_hours_dict = {}
+                for day, hours in value.items():
+                    if hasattr(hours, "dict"):
+                        working_hours_dict[day] = hours.dict()
+                    else:
+                        working_hours_dict[day] = hours
                 values.append(json.dumps(working_hours_dict))
                 update_fields.append(f"{field} = %s::jsonb")
             else:
