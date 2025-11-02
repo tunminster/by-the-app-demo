@@ -171,7 +171,7 @@ def create_appointment(appointment_data: AppointmentCreate) -> dict:
         cur.execute("""
             SELECT id FROM appointments 
             WHERE dentist_id = %s AND appointment_date = %s AND appointment_time = %s
-        """, (appointment_data.dentist_id, appointment_data.date, appointment_data.time))
+        """, (appointment_data.dentist_id, appointment_data.appointment_date, appointment_data.appointment_time))
         conflict = cur.fetchone()
         if conflict:
             raise HTTPException(
