@@ -168,20 +168,6 @@ def create_dentist(dentist_data: DentistCreate) -> dict:
 
 def update_dentist(dentist_id: int, dentist_data: DentistUpdate) -> Optional[dict]:
     """Update an existing dentist"""
-    # Build dynamic update query
-    update_fields = []
-    values = []
-    
-    for field, value in dentist_data.dict(exclude_unset=True).items():
-        if value is not None:
-            update_fields.append(f"{field} = %s")
-            values.append(value)
-    
-    if not update_fields:
-        return get_dentist_by_id(dentist_id)
-    
-def update_dentist(dentist_id: int, dentist_data: DentistUpdate) -> Optional[dict]:
-    """Update an existing dentist"""
     import json
     # Build dynamic update query
     update_fields = []

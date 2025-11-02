@@ -6,9 +6,13 @@ from datetime import datetime, timezone, date, time
 import jwt
 from jwt import PyJWTError
 import os
+import logging
 from app.utils.db import conn
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, Json
 import psycopg2
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # Initialize router
 availability_router = APIRouter()
@@ -111,8 +115,8 @@ def require_authenticated_user(current_user: dict = Depends(get_current_user)) -
     return current_user
 
 # Database helper functions
-def get_availability_by_id(availability_id: int) -> Optional[dict]:
-    """Get a single availability by ID"""
+def _get_availability_by_id(availability_id: int) -> Optional[dict]:
+    """Get a single availability by ID (internal helper)"""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             SELECT a.*, d.name as dentist_name
@@ -122,16 +126,20 @@ def get_availability_by_id(availability_id: int) -> Optional[dict]:
         """, (availability_id,))
         return cur.fetchone()
 
-def get_availability_by_dentist_and_date(dentist_id: int, date: date) -> Optional[dict]:
-    """Get availability for a specific dentist on a specific date"""
+def _get_availability_by_dentist_and_date(dentist_id: int, date: date) -> Optional[dict]:
+    """Get availability for a specific dentist on a specific date (internal helper)"""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute("""
+        query = """
             SELECT a.*, d.name as dentist_name
             FROM availability a
             JOIN dentists d ON a.dentist_id = d.id
             WHERE a.dentist_id = %s AND a.date = %s
-        """, (dentist_id, date))
-        return cur.fetchone()
+        """
+        logger.info(f"Querying availability: dentist_id={dentist_id}, date={date}")
+        cur.execute(query, (dentist_id, date))
+        result = cur.fetchone()
+        logger.info(f"Query result: {result}")
+        return result
 
 def get_all_availability() -> List[dict]:
     """Get all availability records"""
@@ -147,7 +155,9 @@ def get_all_availability() -> List[dict]:
 def create_availability(availability_data: AvailabilityCreate) -> dict:
     """Create a new availability record"""
     # Check if availability already exists for this dentist and date
-    existing = get_availability_by_dentist_and_date(availability_data.dentist_id, availability_data.date)
+    logger.info(f"Creating availability - dentist_id: {availability_data.dentist_id}, date: {availability_data.date}")
+    existing = _get_availability_by_dentist_and_date(availability_data.dentist_id, availability_data.date)
+    logger.info(f"Existing availability check result: {existing}")
     if existing:
         raise HTTPException(status_code=400, detail="Availability already exists for this dentist on this date")
     
@@ -161,12 +171,12 @@ def create_availability(availability_data: AvailabilityCreate) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             INSERT INTO availability (dentist_id, date, time_slots)
-            VALUES (%s, %s, %s)
+            VALUES (%s, %s, %s::jsonb)
             RETURNING id, dentist_id, date, time_slots, created_at, updated_at
         """, (
             availability_data.dentist_id,
             availability_data.date,
-            [slot.dict() for slot in availability_data.time_slots]
+            Json([slot.dict() for slot in availability_data.time_slots])
         ))
         result = cur.fetchone()
         result['dentist_name'] = dentist['name']
@@ -181,14 +191,15 @@ def update_availability(availability_id: int, availability_data: AvailabilityUpd
     for field, value in availability_data.dict(exclude_unset=True).items():
         if value is not None:
             if field == "time_slots":
-                update_fields.append("time_slots = %s")
-                values.append([slot.dict() for slot in value])
+                update_fields.append("time_slots = %s::jsonb")
+                # value is already a list of dicts from .dict()
+                values.append(Json(value))
             else:
                 update_fields.append(f"{field} = %s")
                 values.append(value)
     
     if not update_fields:
-        return get_availability_by_id(availability_id)
+        return _get_availability_by_id(availability_id)
     
     # Add updated_at timestamp
     update_fields.append("updated_at = %s")
@@ -306,9 +317,9 @@ def book_time_slot(availability_id: int, time_slot: TimeSlot) -> bool:
         # Update the availability record
         cur.execute("""
             UPDATE availability 
-            SET time_slots = %s, updated_at = %s
+            SET time_slots = %s::jsonb, updated_at = %s
             WHERE id = %s
-        """, (time_slots, datetime.now(timezone.utc), availability_id))
+        """, (Json(time_slots), datetime.now(timezone.utc), availability_id))
         
         return cur.rowcount > 0
 
@@ -333,9 +344,9 @@ def release_time_slot(availability_id: int, time_slot: TimeSlot) -> bool:
         # Update the availability record
         cur.execute("""
             UPDATE availability 
-            SET time_slots = %s, updated_at = %s
+            SET time_slots = %s::jsonb, updated_at = %s
             WHERE id = %s
-        """, (time_slots, datetime.now(timezone.utc), availability_id))
+        """, (Json(time_slots), datetime.now(timezone.utc), availability_id))
         
         return cur.rowcount > 0
 
@@ -413,7 +424,7 @@ async def get_availability_by_id(availability_id: int, current_user: dict = Depe
     Get a specific availability record by ID
     """
     try:
-        availability = get_availability_by_id(availability_id)
+        availability = _get_availability_by_id(availability_id)
         if not availability:
             raise HTTPException(status_code=404, detail="Availability record not found")
         return availability
@@ -432,7 +443,7 @@ async def get_availability_by_dentist_and_date(
     Get availability for a specific dentist on a specific date
     """
     try:
-        availability = get_availability_by_dentist_and_date(dentist_id, date)
+        availability = _get_availability_by_dentist_and_date(dentist_id, date)
         if not availability:
             raise HTTPException(status_code=404, detail="No availability found for this dentist on this date")
         return availability
@@ -483,7 +494,7 @@ async def update_availability_endpoint(
     """
     try:
         # Check if availability exists
-        existing_availability = get_availability_by_id(availability_id)
+        existing_availability = _get_availability_by_id(availability_id)
         if not existing_availability:
             raise HTTPException(status_code=404, detail="Availability record not found")
         
@@ -504,7 +515,7 @@ async def delete_availability_endpoint(
     """
     try:
         # Check if availability exists
-        existing_availability = get_availability_by_id(availability_id)
+        existing_availability = _get_availability_by_id(availability_id)
         if not existing_availability:
             raise HTTPException(status_code=404, detail="Availability record not found")
         
