@@ -50,6 +50,7 @@ LOG_EVENT_TYPES = [
     'session.created', 'session.updated'
 ]
 SHOW_TIMING_MATH = False
+BLOCK_NUMBERS = {"+14066521329"}
 
 
 # Twilio voice route (main entry)
@@ -62,7 +63,13 @@ async def voice(request: Request):
     We'll return TwiML to instruct Twilio to stream media to our /media-stream WS endpoint.
     """
     host = request.url.hostname
+    caller_number = request.headers.get('From')
+    
     vr = VoiceResponse()
+
+    if caller_number in BLOCK_NUMBERS:
+        
+        return HTMLResponse(content=str(VoiceResponse().say("Sorry, you are not allowed to call this number.", voice="Google.en-US-Chirp3-HD-Aoede")), media_type="application/xml")
 
     vr.say("Welcome to the dental office. Please wait while we connect you to our AI assistant.", voice="Google.en-US-Chirp3-HD-Aoede")
     vr.pause(length=1)
