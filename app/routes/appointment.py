@@ -599,9 +599,19 @@ def search_appointments(
     date_from: date = None,
     date_to: date = None,
     status: str = None,
-    treatment: str = None
+    treatment: str = None,
+    page: int = 1,
+    page_size: int = 25
 ) -> List[dict]:
-    """Search appointments by various criteria"""
+    """Search appointments by various criteria with pagination"""
+    if page < 1:
+        page = 1
+    if page_size < 1:
+        page_size = 1
+    if page_size > 100:
+        page_size = 100
+    
+    offset = (page - 1) * page_size
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         conditions = []
         params = []
@@ -632,13 +642,15 @@ def search_appointments(
         
         where_clause = " AND ".join(conditions) if conditions else "1=1"
         
-        cur.execute(f"""
+        query = f"""
             SELECT a.*, d.name as dentist_name
             FROM appointments a
             JOIN dentists d ON a.dentist_id = d.id
             WHERE {where_clause}
             ORDER BY a.appointment_date, a.appointment_time
-        """, params)
+            LIMIT %s OFFSET %s
+        """
+        cur.execute(query, params + [page_size, offset])
         results = cur.fetchall()
         return [format_appointment_data(appointment) for appointment in results]
 
@@ -840,13 +852,29 @@ async def get_appointments(
     date_to: Optional[date] = None,
     status: Optional[str] = None,
     treatment: Optional[str] = None,
+    page: int = 1,
+    page_size: int = 25,
     current_user: dict = Depends(require_authenticated_user)
 ):
     """
     Get all appointments with optional filtering
     """
+    if page < 1:
+        raise HTTPException(status_code=400, detail="page must be >= 1")
+    if page_size < 1 or page_size > 100:
+        raise HTTPException(status_code=400, detail="page_size must be between 1 and 100")
+    
     try:
-        appointments = search_appointments(patient, dentist_id, date_from, date_to, status, treatment)
+        appointments = search_appointments(
+            patient,
+            dentist_id,
+            date_from,
+            date_to,
+            status,
+            treatment,
+            page,
+            page_size
+        )
         return appointments
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch appointments: {str(e)}")
