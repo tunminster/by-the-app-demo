@@ -163,7 +163,12 @@ def _get_time_slot_details(dentist_id: int, slot_date: date, start_time: str):
     time_slots = record.get("time_slots", [])
     matching_slot = None
     for slot in time_slots:
-        if slot.get("start") == normalized_start:
+        slot_start = _normalize_time_str(slot.get("start"))
+        if slot_start == normalized_start:
+            # Normalize stored values for downstream checks
+            slot["start"] = slot_start
+            if "end" in slot:
+                slot["end"] = _normalize_time_str(slot.get("end"))
             matching_slot = slot
             break
     
@@ -177,27 +182,45 @@ def set_time_slot_availability(
     end_time: Optional[str] = None
 ) -> bool:
     """Set availability flag for a specific time slot"""
-    record, time_slots, matching_slot = _get_time_slot_details(dentist_id, slot_date, start_time)
+    record, _, matching_slot = _get_time_slot_details(dentist_id, slot_date, start_time)
     
-    if not record or not time_slots or not matching_slot:
+    if not record or not matching_slot:
         return False
     
-    if end_time:
-        normalized_end = _normalize_time_str(end_time)
-        if matching_slot.get("end") != normalized_end:
-            return False
+    normalized_start = _normalize_time_str(start_time)
+    normalized_end = _normalize_time_str(end_time) if end_time else matching_slot.get("end")
     
-    if matching_slot.get("available") == available:
+    current_flag = matching_slot.get("available")
+    if isinstance(current_flag, str):
+        current_flag = current_flag.lower() == "true"
+    
+    if current_flag == available:
         return True
-    
-    matching_slot["available"] = available
     
     with conn.cursor() as cur:
         cur.execute("""
             UPDATE availability 
-            SET time_slots = %s::jsonb, updated_at = %s
+            SET time_slots = (
+                SELECT jsonb_agg(
+                    CASE 
+                        WHEN slot->>'start' = %s
+                             AND (%s IS NULL OR slot->>'end' = %s)
+                        THEN jsonb_set(slot, '{available}', %s::jsonb)
+                        ELSE slot
+                    END
+                )
+                FROM jsonb_array_elements(time_slots) AS slot
+            ),
+            updated_at = %s
             WHERE id = %s
-        """, (Json(time_slots), datetime.now(timezone.utc), record["id"]))
+        """, (
+            normalized_start,
+            normalized_end,
+            normalized_end,
+            'true' if available else 'false',
+            datetime.now(timezone.utc),
+            record["id"]
+        ))
         return cur.rowcount > 0
 
 def ensure_time_slot_available(
@@ -220,7 +243,11 @@ def ensure_time_slot_available(
             detail="Requested time slot is not available in the schedule"
         )
     
-    if not matching_slot.get("available", False):
+    flag = matching_slot.get("available", False)
+    if isinstance(flag, str):
+        flag = flag.lower() == "true"
+    
+    if not flag:
         raise HTTPException(
             status_code=400,
             detail="Requested time slot has already been booked"
