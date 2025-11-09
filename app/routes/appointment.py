@@ -67,6 +67,8 @@ class AppointmentSearch(BaseModel):
     treatment: Optional[str] = None
 
 RELEASE_STATUSES = {"cancelled", "rescheduled"}
+NON_ACTIVE_STATUSES = {"cancelled", "rescheduled", "completed", "no_show"}
+VALID_STATUSES = {"confirmed", "cancelled", "completed", "no_show", "rescheduled", "arrived"}
 VALID_STATUSES = {"confirmed", "cancelled", "completed", "no_show", "rescheduled"}
 
 # Authentication functions
@@ -186,6 +188,74 @@ def _slot_reference_key(slot_ref: Optional[dict]) -> Optional[tuple]:
     
     return (slot_ref["dentist_id"], date_key, slot_ref["time"])
 
+def _find_patient_record(patient_name: Optional[str], phone: Optional[str]) -> Optional[dict]:
+    """Find patient record by phone or name"""
+    if not patient_name and not phone:
+        return None
+    
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        if phone:
+            cur.execute("""
+                SELECT id, name, phone FROM patients
+                WHERE phone = %s
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """, (phone,))
+            patient = cur.fetchone()
+            if patient:
+                return patient
+        
+        if patient_name:
+            cur.execute("""
+                SELECT id, name, phone FROM patients
+                WHERE name = %s
+                ORDER BY updated_at DESC
+                LIMIT 1
+            """, (patient_name,))
+            patient = cur.fetchone()
+            if patient:
+                return patient
+    
+    return None
+
+def _sync_patient_next_appointment(patient_name: Optional[str], phone: Optional[str]) -> None:
+    """Update patient's next_appointment field based on upcoming appointments"""
+    patient_record = _find_patient_record(patient_name, phone)
+    if not patient_record:
+        return
+    
+    excluded_statuses = tuple(NON_ACTIVE_STATUSES)
+    placeholders = ", ".join(["%s"] * len(excluded_statuses))
+    
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute(f"""
+            SELECT appointment_date
+            FROM appointments
+            WHERE (phone = %s OR patient = %s)
+              AND status NOT IN ({placeholders})
+              AND appointment_date >= CURRENT_DATE
+            ORDER BY appointment_date, appointment_time
+            LIMIT 1
+        """, (
+            patient_record["phone"],
+            patient_record["name"],
+            *excluded_statuses
+        ))
+        next_appointment = cur.fetchone()
+    
+    next_date = next_appointment["appointment_date"] if next_appointment else None
+    
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE patients
+            SET next_appointment = %s, updated_at = %s
+            WHERE id = %s
+        """, (
+            next_date,
+            datetime.now(timezone.utc),
+            patient_record["id"]
+        ))
+
 def get_appointment_by_id(appointment_id: int) -> Optional[dict]:
     """Get a single appointment by ID"""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -288,6 +358,11 @@ def create_appointment(appointment_data: AppointmentCreate) -> dict:
                 detail="Appointment created but failed to update availability schedule"
             )
     
+    _sync_patient_next_appointment(
+        formatted_result.get('patient'),
+        formatted_result.get('phone')
+    )
+    
     return formatted_result
 
 def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate) -> Optional[dict]:
@@ -296,6 +371,8 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
     if not existing_appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
     
+    old_patient_name = existing_appointment.get('patient')
+    old_patient_phone = existing_appointment.get('phone')
     old_slot_reference = _extract_slot_reference(existing_appointment)
     old_slot_key = _slot_reference_key(old_slot_reference)
     old_status = existing_appointment.get('status')
@@ -426,6 +503,11 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
                             "start": old_slot_reference['time']
                         }
                     )
+            new_patient_name = formatted_result.get('patient')
+            new_patient_phone = formatted_result.get('phone')
+            _sync_patient_next_appointment(new_patient_name, new_patient_phone)
+            if new_patient_name != old_patient_name or new_patient_phone != old_patient_phone:
+                _sync_patient_next_appointment(old_patient_name, old_patient_phone)
             return formatted_result
         
         # Release old slot if the assignment changed and the old status kept it booked
@@ -496,6 +578,12 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
                     status_code=500,
                     detail="Appointment updated but failed to update availability schedule"
                 )
+        
+        new_patient_name = formatted_result.get('patient')
+        new_patient_phone = formatted_result.get('phone')
+        _sync_patient_next_appointment(new_patient_name, new_patient_phone)
+        if new_patient_name != old_patient_name or new_patient_phone != old_patient_phone:
+            _sync_patient_next_appointment(old_patient_name, old_patient_phone)
         
         return formatted_result
 
@@ -673,6 +761,11 @@ def update_appointment_status(appointment_id: int, status: str) -> Optional[dict
                 status_code=500,
                 detail="Appointment status updated but availability could not be synchronized"
             )
+    
+    _sync_patient_next_appointment(
+        formatted_result.get("patient"),
+        formatted_result.get("phone")
+    )
     
     return formatted_result
 
@@ -857,6 +950,11 @@ async def delete_appointment_endpoint(
         success = delete_appointment(appointment_id)
         if not success:
             raise HTTPException(status_code=500, detail="Failed to delete appointment")
+        
+        _sync_patient_next_appointment(
+            existing_appointment.get('patient'),
+            existing_appointment.get('phone')
+        )
         
         return {"message": "Appointment deleted successfully"}
     except HTTPException:
