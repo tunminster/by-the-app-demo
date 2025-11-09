@@ -67,6 +67,7 @@ class AppointmentSearch(BaseModel):
     treatment: Optional[str] = None
 
 RELEASE_STATUSES = {"cancelled", "rescheduled"}
+VALID_STATUSES = {"confirmed", "cancelled", "completed", "no_show", "rescheduled"}
 
 # Authentication functions
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -588,15 +589,92 @@ def get_appointments_by_patient(patient_name: str) -> List[dict]:
         results = cur.fetchall()
         return [format_appointment_data(appointment) for appointment in results]
 
-def update_appointment_status(appointment_id: int, status: str) -> bool:
-    """Update appointment status"""
+def update_appointment_status(appointment_id: int, status: str) -> Optional[dict]:
+    """Update appointment status and synchronize availability"""
+    status = status.lower()
+    if status not in VALID_STATUSES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid status '{status}'. Allowed statuses: {', '.join(sorted(VALID_STATUSES))}"
+        )
+    
+    existing_appointment = get_appointment_by_id(appointment_id)
+    if not existing_appointment:
+        return None
+    
+    current_status = existing_appointment.get("status", "").lower()
+    if current_status == status:
+        return existing_appointment
+    
+    old_slot_reference = _extract_slot_reference(existing_appointment)
+    old_status_releases = current_status in RELEASE_STATUSES
+    new_status_releases = status in RELEASE_STATUSES
+    
+    # If we are moving from a release status to a booking status, ensure the slot is free
+    if not new_status_releases and old_status_releases and old_slot_reference:
+        ensure_time_slot_available(
+            old_slot_reference["dentist_id"],
+            old_slot_reference["date"],
+            old_slot_reference["time"]
+        )
+    
     with conn.cursor() as cur:
         cur.execute("""
             UPDATE appointments 
             SET status = %s, updated_at = %s
             WHERE id = %s
         """, (status, datetime.now(timezone.utc), appointment_id))
-        return cur.rowcount > 0
+        if cur.rowcount == 0:
+            return None
+    
+    updated_appointment = get_appointment_by_id(appointment_id)
+    formatted_result = format_appointment_data(updated_appointment)
+    
+    slot_reference = _extract_slot_reference(formatted_result)
+    
+    # Release slot when moving into a releasing status
+    if slot_reference and new_status_releases and not old_status_releases:
+        released = set_time_slot_availability(
+            slot_reference["dentist_id"],
+            slot_reference["date"],
+            slot_reference["time"],
+            available=True
+        )
+        if not released:
+            logger.warning(
+                "Failed to release time slot after status update",
+                extra={
+                    "appointment_id": appointment_id,
+                    "dentist_id": slot_reference["dentist_id"],
+                    "date": slot_reference["date"],
+                    "start": slot_reference["time"]
+                }
+            )
+    
+    # Book slot when moving from releasing status back to a booking status
+    if slot_reference and not new_status_releases and old_status_releases:
+        booked = set_time_slot_availability(
+            slot_reference["dentist_id"],
+            slot_reference["date"],
+            slot_reference["time"],
+            available=False
+        )
+        if not booked:
+            logger.error(
+                "Failed to mark time slot as booked after status update",
+                extra={
+                    "appointment_id": appointment_id,
+                    "dentist_id": slot_reference["dentist_id"],
+                    "date": slot_reference["date"],
+                    "start": slot_reference["time"]
+                }
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Appointment status updated but availability could not be synchronized"
+            )
+    
+    return formatted_result
 
 def get_appointment_statistics() -> dict:
     """Get appointment statistics"""
@@ -796,16 +874,14 @@ async def update_appointment_status_endpoint(
     Update appointment status
     """
     try:
-        # Check if appointment exists
-        existing_appointment = get_appointment_by_id(appointment_id)
-        if not existing_appointment:
+        updated = update_appointment_status(appointment_id, status)
+        if not updated:
             raise HTTPException(status_code=404, detail="Appointment not found")
         
-        success = update_appointment_status(appointment_id, status)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to update appointment status")
-        
-        return {"message": "Appointment status updated successfully"}
+        return {
+            "message": "Appointment status updated successfully",
+            "appointment": updated
+        }
     except HTTPException:
         raise
     except Exception as e:
