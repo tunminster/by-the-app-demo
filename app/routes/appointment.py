@@ -6,15 +6,20 @@ from datetime import datetime, timezone, date, time
 import jwt
 from jwt import PyJWTError
 import os
+import logging
 from app.utils.db import conn
 from psycopg2.extras import RealDictCursor
 import psycopg2
+from app.routes.availability import ensure_time_slot_available, set_time_slot_availability
 
 # Initialize router
 appointment_router = APIRouter()
 
 # Security setup
 security = HTTPBearer()
+
+# Logger
+logger = logging.getLogger(__name__)
 
 # JWT settings
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-this-in-production")
@@ -60,6 +65,8 @@ class AppointmentSearch(BaseModel):
     date_to: Optional[date] = None
     status: Optional[str] = None
     treatment: Optional[str] = None
+
+RELEASE_STATUSES = {"cancelled", "rescheduled"}
 
 # Authentication functions
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -133,6 +140,51 @@ def format_appointment_data(appointment: dict) -> dict:
     
     return appointment
 
+def _normalize_time_value(value) -> Optional[str]:
+    """Normalize various time representations to HH:MM string"""
+    if value is None:
+        return None
+    if hasattr(value, "strftime"):
+        return value.strftime("%H:%M")
+    return str(value)
+
+def _extract_slot_reference(appointment: Optional[dict]) -> Optional[dict]:
+    """Extract dentist/date/time reference from appointment"""
+    if not appointment:
+        return None
+    
+    dentist_id = appointment.get('dentist_id')
+    appointment_date = appointment.get('appointment_date')
+    appointment_time = _normalize_time_value(appointment.get('appointment_time'))
+    
+    if dentist_id is None or appointment_date is None or appointment_time is None:
+        return None
+    
+    if isinstance(appointment_date, str):
+        try:
+            appointment_date = datetime.strptime(appointment_date, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    
+    return {
+        "dentist_id": dentist_id,
+        "date": appointment_date,
+        "time": appointment_time
+    }
+
+def _slot_reference_key(slot_ref: Optional[dict]) -> Optional[tuple]:
+    """Return comparable tuple for slot references"""
+    if not slot_ref:
+        return None
+    
+    slot_date = slot_ref["date"]
+    if isinstance(slot_date, date):
+        date_key = slot_date.isoformat()
+    else:
+        date_key = str(slot_date)
+    
+    return (slot_ref["dentist_id"], date_key, slot_ref["time"])
+
 def get_appointment_by_id(appointment_id: int) -> Optional[dict]:
     """Get a single appointment by ID"""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -186,6 +238,13 @@ def create_appointment(appointment_data: AppointmentCreate) -> dict:
                 detail="Time slot is already booked for this dentist"
             )
     
+    # Ensure availability slot exists and is open
+    ensure_time_slot_available(
+        appointment_data.dentist_id,
+        appointment_data.appointment_date,
+        appointment_data.appointment_time
+    )
+    
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             INSERT INTO appointments (patient, phone, dentist_id, appointment_date, appointment_time, treatment, status, notes)
@@ -203,15 +262,73 @@ def create_appointment(appointment_data: AppointmentCreate) -> dict:
         ))
         result = cur.fetchone()
         result['dentist_name'] = dentist['name']
-        return format_appointment_data(result)
+    
+    formatted_result = format_appointment_data(result)
+    slot_reference = _extract_slot_reference(formatted_result)
+    
+    if slot_reference and formatted_result.get('status') not in RELEASE_STATUSES:
+        slot_updated = set_time_slot_availability(
+            slot_reference['dentist_id'],
+            slot_reference['date'],
+            slot_reference['time'],
+            available=False
+        )
+        if not slot_updated:
+            logger.error(
+                "Failed to mark time slot as booked",
+                extra={
+                    "dentist_id": slot_reference['dentist_id'],
+                    "date": slot_reference['date'],
+                    "start": slot_reference['time']
+                }
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Appointment created but failed to update availability schedule"
+            )
+    
+    return formatted_result
 
 def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate) -> Optional[dict]:
     """Update an existing appointment"""
+    existing_appointment = get_appointment_by_id(appointment_id)
+    if not existing_appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    
+    old_slot_reference = _extract_slot_reference(existing_appointment)
+    old_slot_key = _slot_reference_key(old_slot_reference)
+    old_status = existing_appointment.get('status')
+    old_status_releases = old_status in RELEASE_STATUSES
+    
+    update_payload = appointment_data.dict(exclude_unset=True)
+    status_changed = 'status' in update_payload
+    new_status_candidate = update_payload.get('status', old_status)
+    new_status_releases_candidate = new_status_candidate in RELEASE_STATUSES
+    
+    candidate_slot_reference = _extract_slot_reference({
+        "dentist_id": update_payload.get('dentist_id', existing_appointment.get('dentist_id')),
+        "appointment_date": update_payload.get('appointment_date', existing_appointment.get('appointment_date')),
+        "appointment_time": update_payload.get('appointment_time', existing_appointment.get('appointment_time'))
+    })
+    candidate_slot_key = _slot_reference_key(candidate_slot_reference)
+    slot_changed_candidate = old_slot_key != candidate_slot_key
+    
+    if (
+        candidate_slot_reference
+        and not new_status_releases_candidate
+        and (slot_changed_candidate or (status_changed and old_status_releases))
+    ):
+        ensure_time_slot_available(
+            candidate_slot_reference['dentist_id'],
+            candidate_slot_reference['date'],
+            candidate_slot_reference['time']
+        )
+    
     # Build dynamic update query
     update_fields = []
     values = []
     
-    for field, value in appointment_data.dict(exclude_unset=True).items():
+    for field, value in update_payload.items():
         if value is not None:
             # Map Pydantic field names to database column names
             db_field = field
@@ -232,19 +349,14 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
             values.append(value)
     
     if not update_fields:
-        return get_appointment_by_id(appointment_id)
+        return existing_appointment
     
     # Check for time conflicts if date/time/dentist is being updated
-    if any(field in appointment_data.dict(exclude_unset=True) for field in ['dentist_id', 'appointment_date', 'appointment_time']):
-        # Get current appointment data
-        current_appointment = get_appointment_by_id(appointment_id)
-        if not current_appointment:
-            raise HTTPException(status_code=404, detail="Appointment not found")
-        
+    if any(field in update_payload for field in ['dentist_id', 'appointment_date', 'appointment_time']):
         # Use new values or current values
-        dentist_id = appointment_data.dentist_id or current_appointment['dentist_id']
-        appointment_date = appointment_data.appointment_date or current_appointment['appointment_date']
-        appointment_time = appointment_data.appointment_time or current_appointment['appointment_time']
+        dentist_id = appointment_data.dentist_id or existing_appointment['dentist_id']
+        appointment_date = appointment_data.appointment_date or existing_appointment['appointment_date']
+        appointment_time = appointment_data.appointment_time or existing_appointment['appointment_time']
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
@@ -284,7 +396,107 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
                 dentist = dentist_cur.fetchone()
                 result['dentist_name'] = dentist['name'] if dentist else None
         
-        return format_appointment_data(result)
+        formatted_result = format_appointment_data(result)
+        new_slot_reference = _extract_slot_reference(formatted_result)
+        new_slot_key = _slot_reference_key(new_slot_reference)
+        new_status = formatted_result.get('status')
+        
+        status_changed = 'status' in update_payload
+        new_status_releases = new_status in RELEASE_STATUSES
+        old_status_releases = old_status in RELEASE_STATUSES
+        slot_changed = old_slot_key != new_slot_key
+        
+        # Handle transitions to release statuses
+        if status_changed and new_status_releases and not old_status_releases:
+            if old_slot_reference:
+                released = set_time_slot_availability(
+                    old_slot_reference['dentist_id'],
+                    old_slot_reference['date'],
+                    old_slot_reference['time'],
+                    available=True
+                )
+                if not released:
+                    logger.warning(
+                        "Failed to release time slot after cancellation/reschedule",
+                        extra={
+                            "appointment_id": appointment_id,
+                            "dentist_id": old_slot_reference['dentist_id'],
+                            "date": old_slot_reference['date'],
+                            "start": old_slot_reference['time']
+                        }
+                    )
+            return formatted_result
+        
+        # Release old slot if the assignment changed and the old status kept it booked
+        if slot_changed and old_slot_reference and not old_status_releases:
+            released = set_time_slot_availability(
+                old_slot_reference['dentist_id'],
+                old_slot_reference['date'],
+                old_slot_reference['time'],
+                available=True
+            )
+            if not released:
+                logger.warning(
+                    "Failed to release previous time slot after reassignment",
+                    extra={
+                        "appointment_id": appointment_id,
+                        "dentist_id": old_slot_reference['dentist_id'],
+                        "date": old_slot_reference['date'],
+                        "start": old_slot_reference['time']
+                    }
+                )
+        
+        # Determine if we need to (re)book the current slot
+        need_to_book = False
+        if new_slot_reference and not new_status_releases:
+            if slot_changed:
+                need_to_book = True
+            elif status_changed and old_status_releases:
+                need_to_book = True
+        
+        if need_to_book and new_slot_reference:
+            try:
+                ensure_time_slot_available(
+                    new_slot_reference['dentist_id'],
+                    new_slot_reference['date'],
+                    new_slot_reference['time']
+                )
+            except HTTPException as exc:
+                # Rollback appointment update? Already committed. Log and raise to inform caller.
+                logger.error(
+                    "Time slot unavailable when attempting to book after update",
+                    extra={
+                        "appointment_id": appointment_id,
+                        "dentist_id": new_slot_reference['dentist_id'],
+                        "date": new_slot_reference['date'],
+                        "start": new_slot_reference['time'],
+                        "error": exc.detail
+                    }
+                )
+                raise
+            
+            booked = set_time_slot_availability(
+                new_slot_reference['dentist_id'],
+                new_slot_reference['date'],
+                new_slot_reference['time'],
+                available=False
+            )
+            if not booked:
+                logger.error(
+                    "Failed to mark time slot as booked after appointment update",
+                    extra={
+                        "appointment_id": appointment_id,
+                        "dentist_id": new_slot_reference['dentist_id'],
+                        "date": new_slot_reference['date'],
+                        "start": new_slot_reference['time']
+                    }
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Appointment updated but failed to update availability schedule"
+                )
+        
+        return formatted_result
 
 def delete_appointment(appointment_id: int) -> bool:
     """Delete an appointment"""

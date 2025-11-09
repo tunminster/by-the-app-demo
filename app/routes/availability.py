@@ -141,6 +141,91 @@ def _get_availability_by_dentist_and_date(dentist_id: int, date: date) -> Option
         logger.info(f"Query result: {result}")
         return result
 
+def _normalize_time_str(value) -> Optional[str]:
+    """Normalize time representation to HH:MM string"""
+    if value is None:
+        return None
+    if isinstance(value, time):
+        return value.strftime("%H:%M")
+    return str(value)
+
+def _get_time_slot_details(dentist_id: int, slot_date: date, start_time: str):
+    """Retrieve availability record, time slots list, and matching slot for given start time"""
+    if isinstance(slot_date, str):
+        slot_date = datetime.strptime(slot_date, "%Y-%m-%d").date()
+    
+    normalized_start = _normalize_time_str(start_time)
+    record = _get_availability_by_dentist_and_date(dentist_id, slot_date)
+    
+    if not record:
+        return None, None, None
+    
+    time_slots = record.get("time_slots", [])
+    matching_slot = None
+    for slot in time_slots:
+        if slot.get("start") == normalized_start:
+            matching_slot = slot
+            break
+    
+    return record, time_slots, matching_slot
+
+def set_time_slot_availability(
+    dentist_id: int,
+    slot_date: date,
+    start_time,
+    available: bool,
+    end_time: Optional[str] = None
+) -> bool:
+    """Set availability flag for a specific time slot"""
+    record, time_slots, matching_slot = _get_time_slot_details(dentist_id, slot_date, start_time)
+    
+    if not record or not time_slots or not matching_slot:
+        return False
+    
+    if end_time:
+        normalized_end = _normalize_time_str(end_time)
+        if matching_slot.get("end") != normalized_end:
+            return False
+    
+    if matching_slot.get("available") == available:
+        return True
+    
+    matching_slot["available"] = available
+    
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE availability 
+            SET time_slots = %s::jsonb, updated_at = %s
+            WHERE id = %s
+        """, (Json(time_slots), datetime.now(timezone.utc), record["id"]))
+        return cur.rowcount > 0
+
+def ensure_time_slot_available(
+    dentist_id: int,
+    slot_date: date,
+    start_time
+) -> None:
+    """Validate that the requested time slot exists and is currently available"""
+    record, _, matching_slot = _get_time_slot_details(dentist_id, slot_date, start_time)
+    
+    if not record:
+        raise HTTPException(
+            status_code=400,
+            detail="Availability is not configured for this dentist on the selected date"
+        )
+    
+    if not matching_slot:
+        raise HTTPException(
+            status_code=400,
+            detail="Requested time slot is not available in the schedule"
+        )
+    
+    if not matching_slot.get("available", False):
+        raise HTTPException(
+            status_code=400,
+            detail="Requested time slot has already been booked"
+        )
+
 def get_all_availability() -> List[dict]:
     """Get all availability records"""
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
