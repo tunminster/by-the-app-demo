@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from datetime import datetime, timezone, date, time
 import jwt
 from jwt import PyJWTError
@@ -65,6 +65,15 @@ class AppointmentSearch(BaseModel):
     date_to: Optional[date] = None
     status: Optional[str] = None
     treatment: Optional[str] = None
+
+class PaginatedAppointments(BaseModel):
+    items: List[AppointmentResponse]
+    page: int
+    page_size: int
+    total_items: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
 
 RELEASE_STATUSES = {"cancelled", "rescheduled"}
 NON_ACTIVE_STATUSES = {"cancelled", "rescheduled", "completed", "no_show"}
@@ -602,7 +611,7 @@ def search_appointments(
     treatment: str = None,
     page: int = 1,
     page_size: int = 25
-) -> List[dict]:
+) -> Tuple[int, List[dict]]:
     """Search appointments by various criteria with pagination"""
     if page < 1:
         page = 1
@@ -642,6 +651,15 @@ def search_appointments(
         
         where_clause = " AND ".join(conditions) if conditions else "1=1"
         
+        count_query = f"""
+            SELECT COUNT(*)
+            FROM appointments a
+            WHERE {where_clause}
+        """
+        cur.execute(count_query, params)
+        count_row = cur.fetchone()
+        total_items = count_row["count"] if count_row else 0
+        
         query = f"""
             SELECT a.*, d.name as dentist_name
             FROM appointments a
@@ -650,9 +668,10 @@ def search_appointments(
             ORDER BY a.appointment_date, a.appointment_time
             LIMIT %s OFFSET %s
         """
-        cur.execute(query, params + [page_size, offset])
+        query_params = params + [page_size, offset]
+        cur.execute(query, query_params)
         results = cur.fetchall()
-        return [format_appointment_data(appointment) for appointment in results]
+        return total_items, [format_appointment_data(appointment) for appointment in results]
 
 def get_appointments_by_dentist(dentist_id: int, date: date = None) -> List[dict]:
     """Get appointments for a specific dentist"""
@@ -844,7 +863,7 @@ def get_appointment_statistics() -> dict:
 
 # API Endpoints
 
-@appointment_router.get("/appointments", response_model=List[AppointmentResponse])
+@appointment_router.get("/appointments", response_model=PaginatedAppointments)
 async def get_appointments(
     patient: Optional[str] = None,
     dentist_id: Optional[int] = None,
@@ -865,7 +884,7 @@ async def get_appointments(
         raise HTTPException(status_code=400, detail="page_size must be between 1 and 100")
     
     try:
-        appointments = search_appointments(
+        total_items, appointments = search_appointments(
             patient,
             dentist_id,
             date_from,
@@ -875,7 +894,16 @@ async def get_appointments(
             page,
             page_size
         )
-        return appointments
+        total_pages = (total_items + page_size - 1) // page_size if total_items else 0
+        return PaginatedAppointments(
+            items=appointments,
+            page=page,
+            page_size=page_size,
+            total_items=total_items,
+            total_pages=total_pages,
+            has_next=page < total_pages,
+            has_prev=page > 1 and total_pages > 0
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch appointments: {str(e)}")
 
