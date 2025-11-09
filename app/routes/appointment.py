@@ -170,8 +170,15 @@ def create_appointment(appointment_data: AppointmentCreate) -> dict:
     with conn.cursor(cursor_factory=RealDictCursor) as cur:
         cur.execute("""
             SELECT id FROM appointments 
-            WHERE dentist_id = %s AND appointment_date = %s AND appointment_time = %s
-        """, (appointment_data.dentist_id, appointment_data.appointment_date, appointment_data.appointment_time))
+            WHERE dentist_id = %s 
+              AND appointment_date = %s 
+              AND appointment_time = %s
+              AND status NOT IN ('cancelled', 'rescheduled')
+        """, (
+            appointment_data.dentist_id,
+            appointment_data.appointment_date,
+            appointment_data.appointment_time
+        ))
         conflict = cur.fetchone()
         if conflict:
             raise HTTPException(
@@ -242,7 +249,11 @@ def update_appointment(appointment_id: int, appointment_data: AppointmentUpdate)
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT id FROM appointments 
-                WHERE dentist_id = %s AND appointment_date = %s AND appointment_time = %s AND id != %s
+                WHERE dentist_id = %s 
+                  AND appointment_date = %s 
+                  AND appointment_time = %s 
+                  AND id != %s
+                  AND status NOT IN ('cancelled', 'rescheduled')
             """, (dentist_id, appointment_date, appointment_time, appointment_id))
             conflict = cur.fetchone()
             if conflict:

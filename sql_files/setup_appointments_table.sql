@@ -53,10 +53,10 @@ ON CONFLICT DO NOTHING;
 
 -- Add constraints
 ALTER TABLE appointments ADD CONSTRAINT chk_appointments_status 
-    CHECK (status IN ('confirmed', 'cancelled', 'completed', 'no_show', 'rescheduled'));
+    CHECK (status IN ('confirmed', 'cancelled', 'completed', 'no_show', 'rescheduled', 'arrived'));
 
 ALTER TABLE appointments ADD CONSTRAINT chk_appointments_date 
-    CHECK (appointment_date >= CURRENT_DATE);
+    CHECK (appointment_date >= CURRENT_DATE - INTERVAL '1 day');
 
 ALTER TABLE appointments ADD CONSTRAINT chk_appointments_time 
     CHECK (appointment_time >= '08:00' AND appointment_time <= '18:00');
