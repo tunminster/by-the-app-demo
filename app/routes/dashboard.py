@@ -183,7 +183,7 @@ async def get_today_appointments(
                     LIMIT %s
                 """, (today, limit))
             else:
-                # Get upcoming appointments (from today onwards)
+                # Get upcoming appointments (future appointments only, excluding today)
                 cur.execute("""
                     SELECT 
                         a.id,
@@ -195,7 +195,7 @@ async def get_today_appointments(
                         a.appointment_date
                     FROM appointments a
                     LEFT JOIN dentists d ON a.dentist_id = d.id
-                    WHERE a.appointment_date >= %s
+                    WHERE a.appointment_date > %s
                     ORDER BY a.appointment_date, a.appointment_time
                     LIMIT %s
                 """, (today, limit))
