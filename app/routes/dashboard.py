@@ -163,8 +163,6 @@ async def get_today_appointments(
                 detail="limit must be either 10 or 20"
             )
         
-        today = date.today()
-        
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if filter_type == "today":
                 # Get today's appointments
@@ -178,12 +176,13 @@ async def get_today_appointments(
                         d.name as dentist_name
                     FROM appointments a
                     LEFT JOIN dentists d ON a.dentist_id = d.id
-                    WHERE a.appointment_date = %s
+                    WHERE a.appointment_date = CURRENT_DATE
+                      AND a.status NOT IN ('cancelled', 'rescheduled', 'completed', 'no_show')
                     ORDER BY a.appointment_time
                     LIMIT %s
-                """, (today, limit))
+                """, (limit,))
             else:
-                # Get upcoming appointments (future appointments only, excluding today)
+                # Get upcoming active appointments (future appointments only, excluding today and inactive statuses)
                 cur.execute("""
                     SELECT 
                         a.id,
@@ -195,10 +194,11 @@ async def get_today_appointments(
                         a.appointment_date
                     FROM appointments a
                     LEFT JOIN dentists d ON a.dentist_id = d.id
-                    WHERE a.appointment_date > %s
+                    WHERE a.appointment_date > CURRENT_DATE
+                      AND a.status NOT IN ('cancelled', 'rescheduled', 'completed', 'no_show')
                     ORDER BY a.appointment_date, a.appointment_time
                     LIMIT %s
-                """, (today, limit))
+                """, (limit,))
             
             appointments = cur.fetchall()
         
