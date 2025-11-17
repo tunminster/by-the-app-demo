@@ -136,15 +136,17 @@ async def get_dashboard_stats(current_user: dict = Depends(require_authenticated
 @dashboard_router.get("/dashboard/appointments/today")
 async def get_today_appointments(
     filter_type: Optional[str] = "today",
-    limit: Optional[int] = 10,
+    page: Optional[int] = 1,
+    page_size: Optional[int] = 10,
     current_user: dict = Depends(require_authenticated_user)
 ):
     """
-    Get today's or upcoming appointments
+    Get today's or upcoming appointments with pagination
     Parameters:
         filter_type: "today" (default) or "upcoming" to filter appointments
-        limit: Number of appointments to return (10 or 20, default: 10)
-    Returns: List of appointments scheduled for today or upcoming
+        page: Page number (default: 1, must be >= 1)
+        page_size: Number of appointments per page (default: 10, must be between 1 and 100)
+    Returns: Paginated list of appointments scheduled for today or upcoming
     """
     try:
         # Validate filter_type
@@ -154,52 +156,53 @@ async def get_today_appointments(
                 detail="filter_type must be either 'today' or 'upcoming'"
             )
         
-        # Validate and set limit
-        if limit is None:
-            limit = 10
-        elif limit not in [10, 20]:
-            raise HTTPException(
-                status_code=400,
-                detail="limit must be either 10 or 20"
-            )
+        # Validate and set pagination parameters
+        if page is None or page < 1:
+            page = 1
+        if page_size is None or page_size < 1:
+            page_size = 10
+        if page_size > 100:
+            page_size = 100
+        
+        offset = (page - 1) * page_size
         
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Build base WHERE clause based on filter_type
             if filter_type == "today":
-                # Get today's appointments
-                cur.execute("""
-                    SELECT 
-                        a.id,
-                        a.patient,
-                        a.appointment_time as time,
-                        a.treatment,
-                        COALESCE(a.status, 'confirmed') as status,
-                        d.name as dentist_name
-                    FROM appointments a
-                    LEFT JOIN dentists d ON a.dentist_id = d.id
-                    WHERE a.appointment_date = CURRENT_DATE
-                      AND a.status NOT IN ('cancelled', 'rescheduled', 'completed', 'no_show')
-                    ORDER BY a.appointment_time
-                    LIMIT %s
-                """, (limit,))
+                date_condition = "a.appointment_date = CURRENT_DATE"
+                order_clause = "ORDER BY a.appointment_time"
             else:
-                # Get upcoming active appointments (future appointments only, excluding today and inactive statuses)
-                cur.execute("""
-                    SELECT 
-                        a.id,
-                        a.patient,
-                        a.appointment_time as time,
-                        a.treatment,
-                        COALESCE(a.status, 'confirmed') as status,
-                        d.name as dentist_name,
-                        a.appointment_date
-                    FROM appointments a
-                    LEFT JOIN dentists d ON a.dentist_id = d.id
-                    WHERE a.appointment_date > CURRENT_DATE
-                      AND a.status NOT IN ('cancelled', 'rescheduled', 'completed', 'no_show')
-                    ORDER BY a.appointment_date, a.appointment_time
-                    LIMIT %s
-                """, (limit,))
+                date_condition = "a.appointment_date > CURRENT_DATE"
+                order_clause = "ORDER BY a.appointment_date, a.appointment_time"
             
+            # Get total count
+            count_query = f"""
+                SELECT COUNT(*) as total
+                FROM appointments a
+                WHERE {date_condition}
+                  AND a.status NOT IN ('cancelled', 'rescheduled', 'completed', 'no_show')
+            """
+            cur.execute(count_query)
+            total_items = cur.fetchone()['total']
+            
+            # Get paginated appointments
+            appointments_query = f"""
+                SELECT 
+                    a.id,
+                    a.patient,
+                    a.appointment_time as time,
+                    a.treatment,
+                    COALESCE(a.status, 'confirmed') as status,
+                    d.name as dentist_name,
+                    a.appointment_date
+                FROM appointments a
+                LEFT JOIN dentists d ON a.dentist_id = d.id
+                WHERE {date_condition}
+                  AND a.status NOT IN ('cancelled', 'rescheduled', 'completed', 'no_show')
+                {order_clause}
+                LIMIT %s OFFSET %s
+            """
+            cur.execute(appointments_query, (page_size, offset))
             appointments = cur.fetchall()
         
         # Format appointments to match frontend requirements
@@ -228,19 +231,37 @@ async def get_today_appointments(
             else:
                 formatted_time = "N/A"
             
+            # Format appointment_date as ISO string (YYYY-MM-DD) if present
+            appointment_date_str = None
+            if apt.get('appointment_date'):
+                if hasattr(apt['appointment_date'], 'isoformat'):
+                    appointment_date_str = apt['appointment_date'].isoformat()
+                else:
+                    appointment_date_str = str(apt['appointment_date'])
+            
             formatted_appointments.append({
                 "id": apt['id'],
                 "patient": apt['patient'],
                 "time": formatted_time,
                 "treatment": apt['treatment'],
-                "status": apt['status']
+                "status": apt['status'],
+                "appointment_date": appointment_date_str
             })
         
+        # Calculate pagination metadata
+        total_pages = (total_items + page_size - 1) // page_size if total_items > 0 else 0
+        has_next = page < total_pages
+        has_prev = page > 1
+        
         return {
-            "appointments": formatted_appointments,
-            "filter_type": filter_type,
-            "limit": limit,
-            "count": len(formatted_appointments)
+            "items": formatted_appointments,
+            "page": page,
+            "page_size": page_size,
+            "total_items": total_items,
+            "total_pages": total_pages,
+            "has_next": has_next,
+            "has_prev": has_prev,
+            "filter_type": filter_type
         }
         
     except HTTPException:
