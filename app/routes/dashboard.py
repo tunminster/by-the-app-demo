@@ -173,7 +173,8 @@ async def get_today_appointments(
                         a.appointment_time as time,
                         a.treatment,
                         COALESCE(a.status, 'confirmed') as status,
-                        d.name as dentist_name
+                        d.name as dentist_name,
+                        a.appointment_date
                     FROM appointments a
                     LEFT JOIN dentists d ON a.dentist_id = d.id
                     WHERE a.appointment_date = CURRENT_DATE
@@ -228,12 +229,21 @@ async def get_today_appointments(
             else:
                 formatted_time = "N/A"
             
+            # Format appointment_date as ISO string (YYYY-MM-DD) if present
+            appointment_date_str = None
+            if apt.get('appointment_date'):
+                if hasattr(apt['appointment_date'], 'isoformat'):
+                    appointment_date_str = apt['appointment_date'].isoformat()
+                else:
+                    appointment_date_str = str(apt['appointment_date'])
+            
             formatted_appointments.append({
                 "id": apt['id'],
                 "patient": apt['patient'],
                 "time": formatted_time,
                 "treatment": apt['treatment'],
-                "status": apt['status']
+                "status": apt['status'],
+                "appointment_date": appointment_date_str
             })
         
         return {
