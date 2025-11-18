@@ -50,7 +50,7 @@ LOG_EVENT_TYPES = [
     'session.created', 'session.updated'
 ]
 SHOW_TIMING_MATH = False
-BLOCK_NUMBERS = {"+14066521329"}
+BLOCK_NUMBERS = {"+14066521329", "+12106809570"}
 
 
 # Twilio voice route (main entry)
