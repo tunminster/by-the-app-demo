@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Dict
 from datetime import datetime, timezone
 import jwt
@@ -9,6 +9,7 @@ import os
 from app.utils.db import conn
 from psycopg2.extras import RealDictCursor, Json
 import psycopg2
+from app.routes.auth import verify_password, get_password_hash
 
 # Initialize router
 settings_router = APIRouter()
@@ -57,6 +58,20 @@ class SettingsResponse(SettingsBase):
     
     class Config:
         from_attributes = True
+
+class PasswordUpdate(BaseModel):
+    """Password update request model"""
+    current_password: str = Field(..., alias="currentPassword")
+    new_password: str = Field(..., alias="newPassword")
+    
+    class Config:
+        populate_by_name = True  # Allow both camelCase and snake_case in JSON
+        json_schema_extra = {
+            "example": {
+                "currentPassword": "oldpassword123",
+                "newPassword": "newpassword456"
+            }
+        }
 
 # Authentication functions
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
@@ -216,6 +231,22 @@ def update_settings(settings_data: SettingsUpdate) -> Optional[dict]:
         """, values)
         return cur.fetchone()
 
+def get_user_with_password_hash(username: str) -> Optional[dict]:
+    """Get user with password_hash (for password validation)"""
+    with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        cur.execute("SELECT id, username, email, password_hash, is_active, role FROM users WHERE username = %s", (username,))
+        return cur.fetchone()
+
+def update_user_password(user_id: int, new_password_hash: str) -> bool:
+    """Update user password in database"""
+    with conn.cursor() as cur:
+        cur.execute("""
+            UPDATE users 
+            SET password_hash = %s, updated_at = %s
+            WHERE id = %s
+        """, (new_password_hash, datetime.now(timezone.utc), user_id))
+        return cur.rowcount > 0
+
 # API Endpoints
 
 @settings_router.get("/settings", response_model=SettingsResponse)
@@ -267,4 +298,77 @@ async def update_settings_endpoint(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to update settings: {str(e)}")
+
+@settings_router.put("/settings/password")
+async def update_password_endpoint(
+    password_data: PasswordUpdate,
+    current_user: dict = Depends(require_authenticated_user)
+):
+    """
+    Update user password (any authenticated user can update their own password)
+    Requires current password validation
+    """
+    try:
+        # Validate new password length (bcrypt max 72 bytes)
+        new_password_bytes = len(password_data.new_password.encode('utf-8'))
+        if new_password_bytes > 72:
+            raise HTTPException(
+                status_code=400,
+                detail="New password cannot be longer than 72 bytes. Please use a shorter password."
+            )
+        if len(password_data.new_password) < 8:
+            raise HTTPException(
+                status_code=400,
+                detail="New password must be at least 8 characters long"
+            )
+        
+        # Validate current password length
+        current_password_bytes = len(password_data.current_password.encode('utf-8'))
+        if current_password_bytes > 72:
+            raise HTTPException(
+                status_code=400,
+                detail="Current password cannot be longer than 72 bytes"
+            )
+        
+        # Get user with password_hash from database
+        username = current_user.get('username')
+        if not username:
+            raise HTTPException(
+                status_code=401,
+                detail="User not found"
+            )
+        
+        user_with_hash = get_user_with_password_hash(username)
+        if not user_with_hash:
+            raise HTTPException(
+                status_code=401,
+                detail="User not found"
+            )
+        
+        # Verify current password
+        if not verify_password(password_data.current_password, user_with_hash['password_hash']):
+            raise HTTPException(
+                status_code=400,
+                detail="Current password is incorrect"
+            )
+        
+        # Hash new password
+        new_password_hash = get_password_hash(password_data.new_password)
+        
+        # Update password in database
+        success = update_user_password(user_with_hash['id'], new_password_hash)
+        if not success:
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to update password"
+            )
+        
+        return {
+            "message": "Password updated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update password: {str(e)}")
 
